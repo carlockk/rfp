@@ -1,0 +1,20 @@
+# Node/Next.js
+node_modules/
+.next/
+out/
+dist/
+.vercel/
+npm-debug.log*
+.yarn/*
+.pnpm-store/
+coverage/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Editor/OS
+.vscode/
+.DS_Store
+Thumbs.db
