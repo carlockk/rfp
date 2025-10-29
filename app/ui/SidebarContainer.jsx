@@ -1,0 +1,61 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { usePathname } from 'next/navigation';
+import ThemeToggle from './ThemeToggle';
+import LogoutButton from './LogoutButton';
+import SidebarNav from './SidebarNav';
+import flotaLogo from '@/public/flota.png';
+
+export default function SidebarContainer({ links }) {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (open) {
+      setOpen(false);
+    }
+  }, [pathname, open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="sidebar__burger"
+        aria-label={'Abrir men\u00fa'}
+        onClick={() => setOpen(true)}
+      >
+        ☰
+      </button>
+      <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
+        <div className="sidebar__logo">
+          <div className="sidebar__logo-ring">
+            <Image
+              src={flotaLogo}
+              alt="Flota"
+              width={64}
+              height={64}
+              className="sidebar__logo-image"
+              priority
+            />
+          </div>
+          <span className="sidebar__brand">FLOTA</span>
+        </div>
+        <SidebarNav links={links} />
+        <div className="sidebar__footer">
+          <ThemeToggle />
+          <LogoutButton />
+        </div>
+      </aside>
+      {open ? (
+        <div className="sidebar__backdrop" onClick={() => setOpen(false)} aria-hidden="true"></div>
+      ) : null}
+    </>
+  );
+}
+
+
+
+
+

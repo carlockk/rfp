@@ -8,14 +8,25 @@ export default function BackButton({ fallback = '/' }) {
   const [canGoBack, setCanGoBack] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setCanGoBack(window.history.length > 1);
-    }
+    if (typeof window === 'undefined') return;
+    const hasHistory = window.history.length > 1;
+    const referrer = document.referrer || '';
+    const sameOrigin = referrer.startsWith(window.location.origin);
+    setCanGoBack(hasHistory && sameOrigin);
   }, []);
 
   function handleClick() {
+    if (typeof window === 'undefined') return;
+    const snapshot = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
     if (canGoBack) {
       router.back();
+      setTimeout(() => {
+        const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (current === snapshot) {
+          router.replace(fallback);
+        }
+      }, 400);
     } else {
       router.replace(fallback);
     }
