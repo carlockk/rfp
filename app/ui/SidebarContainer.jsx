@@ -23,10 +23,10 @@ export default function SidebarContainer({ links }) {
       <button
         type="button"
         className="sidebar__burger"
-        aria-label={'Abrir men\u00fa'}
+        aria-label="Abrir menú"
         onClick={() => setOpen(true)}
       >
-        ☰
+        {String.fromCharCode(0x2261)}
       </button>
       <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
         <div className="sidebar__logo">
@@ -54,8 +54,3 @@ export default function SidebarContainer({ links }) {
     </>
   );
 }
-
-
-
-
-

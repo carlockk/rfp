@@ -34,7 +34,7 @@ export default function BackButton({ fallback = '/' }) {
 
   return (
     <button type="button" className="btn" onClick={handleClick}>
-      ← Volver
+      {String.fromCharCode(0x2190)} Volver
     </button>
   );
 }

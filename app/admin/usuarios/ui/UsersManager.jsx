@@ -14,7 +14,7 @@ const defaultForm = {
 const roleLabels = {
   superadmin: 'Super admin',
   admin: 'Admin',
-  tecnico: 'T\u00e9cnico'
+  tecnico: 'Técnico'
 };
 
 export default function UsersManager({ initialUsers }) {
@@ -96,24 +96,25 @@ export default function UsersManager({ initialUsers }) {
   }
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="card card--page">
+      <div className="page-header">
+        <div className="page-header__left">
           <BackButton fallback="/" />
-          <div>
-            <h3 style={{ margin: 0 }}>Usuarios</h3>
-            <span style={{ color: 'var(--muted)', fontSize: 13 }}>
-              Desde aquí puedes crear cuentas para administradores y técnicos.
-            </span>
+          <div className="page-header__titles">
+            <p className="page-header__eyebrow">Panel de administración</p>
+            <h1 className="page-header__title">Usuarios</h1>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="page-header__actions">
           <button className="btn" onClick={refresh} disabled={refreshing}>
             {refreshing ? 'Actualizando...' : 'Actualizar'}
           </button>
           <button className="btn primary" onClick={openPanel}>Nuevo usuario</button>
         </div>
       </div>
+      <p className="page-header__subtitle">
+        Desde aquí puedes crear cuentas para administradores y técnicos.
+      </p>
 
       {error && !panelOpen ? <div style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div> : null}
       {success && !panelOpen ? <div style={{ color: 'var(--accent)', marginBottom: 12 }}>{success}</div> : null}

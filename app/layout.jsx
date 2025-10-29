@@ -19,15 +19,15 @@ export default async function RootLayout({ children }) {
   ];
 
   return (
-    <html lang="es" data-theme="light">
+    <html lang='es' data-theme='light'>
       <body>
         {isAuthenticated ? (
-          <div className="app-shell">
+          <div className='app-shell'>
             <SidebarContainer links={navLinks} />
-            <div className="app-main">
-              <div className="construction-bar" aria-hidden="true"></div>
-              <main className="app-content">
-                <Suspense fallback={<div className="card">Cargando...</div>}>
+            <div className='app-main'>
+              <div className='construction-bar' aria-hidden='true'></div>
+              <main className='app-content'>
+                <Suspense fallback={<div className='card'>Cargando...</div>}>
                   {children}
                 </Suspense>
               </main>
@@ -35,7 +35,7 @@ export default async function RootLayout({ children }) {
           </div>
         ) : (
           <main>
-            <Suspense fallback={<div className="card">Cargando...</div>}>
+            <Suspense fallback={<div className='card'>Cargando...</div>}>
               {children}
             </Suspense>
           </main>
@@ -44,9 +44,3 @@ export default async function RootLayout({ children }) {
     </html>
   );
 }
-
-
-
-
-
-

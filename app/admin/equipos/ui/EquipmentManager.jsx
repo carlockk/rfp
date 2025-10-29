@@ -134,17 +134,20 @@ export default function EquipmentManager() {
   }
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="card card--page">
+      <div className="page-header">
+        <div className="page-header__left">
           <BackButton fallback="/" />
-          <div>
-            <h3 style={{ margin: 0 }}>Equipos</h3>
-            <span style={{ color: 'var(--muted)', fontSize: 13 }}>Gestiona tu flota y agrega unidades desde este panel.</span>
+          <div className="page-header__titles">
+            <p className="page-header__eyebrow">Panel de administración</p>
+            <h1 className="page-header__title">Equipos</h1>
           </div>
         </div>
-        <button className="btn primary" onClick={openPanel}>Nuevo equipo</button>
+        <div className="page-header__actions">
+          <button className="btn primary" onClick={openPanel}>Nuevo equipo</button>
+        </div>
       </div>
+      <p className="page-header__subtitle">Gestiona tu flota y agrega unidades desde este panel.</p>
 
       {error ? <div style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div> : null}
 
@@ -172,9 +175,11 @@ export default function EquipmentManager() {
                   <td>{item.type}</td>
                   <td>{item.brand} {item.model}</td>
                   <td>{item.fuel}{item.adblue ? ' + AdBlue' : ''}</td>
-                  <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '-'}</td>
+                  <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('es-CL') : '-'}</td>
                   <td style={{ display: 'flex', gap: 8 }}>
+                    {/* Editar equipo (detalle/editar) */}
                     <Link href={`/admin/equipos/${item._id}`} className="nav-link">Editar</Link>
+                    {/* QR del equipo */}
                     <Link href={`/admin/equipos/qr/${item._id}`} className="nav-link">QR</Link>
                   </td>
                 </tr>
