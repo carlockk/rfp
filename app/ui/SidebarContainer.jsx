@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import LogoutButton from './LogoutButton';
 import SidebarNav from './SidebarNav';
-import flotaLogo from '@/public/flota.png';
+import flotaLogo from '@/public/log.png';
 
 export default function SidebarContainer({ links }) {
   const [open, setOpen] = useState(false);
@@ -40,7 +40,7 @@ export default function SidebarContainer({ links }) {
               priority
             />
           </div>
-          <span className="sidebar__brand">FLOTA</span>
+          <span className="sidebar__brand">R F P</span>
         </div>
         <SidebarNav links={links} />
         <div className="sidebar__footer">
