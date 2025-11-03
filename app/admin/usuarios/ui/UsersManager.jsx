@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import SlidingPanel from '../../../ui/SlidingPanel';
 import BackButton from '../../../ui/BackButton';
 
@@ -24,6 +24,11 @@ const profileLabels = {
 };
 
 export default function UsersManager({ initialUsers, canManageSuperadmin }) {
+  const rawFormId = useId();
+  const formId = useMemo(
+    () => `user-form-${rawFormId.replace(/[^a-zA-Z0-9_-]/g, '')}`,
+    [rawFormId]
+  );
   const [users, setUsers] = useState(initialUsers);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
@@ -237,14 +242,14 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
         onClose={closePanel}
         footer={(
           <>
-            <button className="btn" onClick={handleCancel} disabled={saving}>Cancelar</button>
-            <button className="btn primary" type="submit" disabled={saving}>
+            <button className="btn" type="button" onClick={handleCancel} disabled={saving}>Cancelar</button>
+            <button className="btn primary" type="submit" form={formId} disabled={saving}>
               {saving ? 'Guardando...' : isEditing ? 'Actualizar' : 'Guardar'}
             </button>
           </>
         )}
       >
-        <form className="form-grid" onSubmit={onSubmit}>
+        <form id={formId} className="form-grid" onSubmit={onSubmit}>
           <div className="form-field">
             <label className="label" htmlFor="name">Nombre</label>
             <input
