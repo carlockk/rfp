@@ -137,7 +137,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
   };
 
   return (
-    <div className="card card--page">
+    <div className="page">
       <div className="page-header">
         <div className="page-header__left">
           <div className="page-header__titles">

@@ -180,7 +180,7 @@ export default function EquipmentManager() {
   }
 
   return (
-    <div className="card card--page">
+    <div className="page">
       <div className="page-header">
         <div className="page-header__left">
           <BackButton fallback="/" />

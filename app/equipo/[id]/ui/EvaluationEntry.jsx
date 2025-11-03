@@ -76,15 +76,15 @@ export default function EvaluationEntry({
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-      <div>
-        <h3 style={{ margin: 0 }}>{equipment.code} - {equipment.type}</h3>
-        <div className="label">
-          {equipment.brand} {equipment.model}{equipment.plate ? ` - ${equipment.plate}` : ''}
+        <div>
+          <h3 style={{ margin: 0 }}>{equipment.code} - {equipment.type}</h3>
+          <div className="label">
+            {equipment.brand} {equipment.model}{equipment.plate ? ` - ${equipment.plate}` : ''}
+          </div>
+          <div className="label" style={{ marginTop: 4 }}>
+            Perfil tecnico: {variant === 'candelaria' ? 'Tecnico Candelaria' : 'Tecnico externo'}
+          </div>
         </div>
-        <div className="label" style={{ marginTop: 4 }}>
-          Perfil tecnico: {variant === 'candelaria' ? 'Tecnico Candelaria' : 'Tecnico externo'}
-        </div>
-      </div>
         <BackButton fallback="/" />
       </div>
 

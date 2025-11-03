@@ -31,6 +31,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
+  const [editingId, setEditingId] = useState('');
 
   const availableRoles = useMemo(
     () => (canManageSuperadmin ? ['tecnico', 'admin', 'superadmin'] : ['tecnico', 'admin']),
@@ -38,6 +39,8 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
   );
 
   const techProfiles = useMemo(() => ['externo', 'candelaria'], []);
+
+  const isEditing = Boolean(editingId);
 
   async function refresh() {
     setRefreshing(true);
@@ -63,12 +66,35 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
   function closePanel(reason) {
     if (['backdrop', 'escape', 'close-button'].includes(reason)) {
       setPanelOpen(false);
+      resetForm();
+      setSuccess('');
     }
   }
 
   function resetForm() {
     setForm(defaultForm);
+    setEditingId('');
     setError('');
+  }
+
+  function openCreate() {
+    resetForm();
+    openPanel();
+  }
+
+  function handleEdit(user) {
+    if (!canManageSuperadmin) return;
+    setEditingId(user.id);
+    setForm({
+      name: user.name || '',
+      email: user.email || '',
+      password: '',
+      role: user.role || 'tecnico',
+      techProfile: user.techProfile || (user.role === 'tecnico' ? 'externo' : '')
+    });
+    setError('');
+    setSuccess('');
+    setPanelOpen(true);
   }
 
   async function onSubmit(event) {
@@ -77,30 +103,48 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
     setError('');
     setSuccess('');
 
-    if (form.password.length < 6) {
-      setError('La contrasena debe tener al menos 6 caracteres');
-      setSaving(false);
-      return;
-    }
-
     if (!availableRoles.includes(form.role)) {
       setError('Rol no permitido');
       setSaving(false);
       return;
     }
 
+    if (!isEditing && form.password.length < 6) {
+      setError('La contrasena debe tener al menos 6 caracteres');
+      setSaving(false);
+      return;
+    }
+
+    if (isEditing && form.password && form.password.length < 6) {
+      setError('La contrasena debe tener al menos 6 caracteres');
+      setSaving(false);
+      return;
+    }
+
     try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
+      const payload = {
+        name: form.name,
+        email: form.email,
+        role: form.role,
+        techProfile: form.role === 'tecnico' ? form.techProfile : '',
+        password: form.password || undefined
+      };
+
+      const res = await fetch(isEditing ? `/api/users/${editingId}` : '/api/users', {
+        method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error(await res.text());
       const created = await res.json();
-      setUsers((prev) => [created, ...prev]);
+      setUsers((prev) =>
+        isEditing
+          ? prev.map((item) => (item.id === created.id ? created : item))
+          : [created, ...prev]
+      );
       setPanelOpen(false);
       resetForm();
-      setSuccess('Usuario creado correctamente');
+      setSuccess(isEditing ? 'Usuario actualizado' : 'Usuario creado correctamente');
     } catch (err) {
       setError(err.message || 'Error al crear el usuario');
     } finally {
@@ -114,8 +158,22 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
     setSuccess('');
   }
 
+  async function handleDelete(userId) {
+    if (!canManageSuperadmin) return;
+    if (typeof window !== 'undefined' && !window.confirm('Seguro que deseas eliminar este usuario?')) return;
+    try {
+      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      setUsers((prev) => prev.filter((item) => item.id !== userId));
+      setError('');
+      setSuccess('Usuario eliminado');
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el usuario');
+    }
+  }
+
   return (
-    <div className="card card--page">
+    <div className="page">
       <div className="page-header">
         <div className="page-header__left">
           <BackButton fallback="/" />
@@ -128,7 +186,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
           <button className="btn" onClick={refresh} disabled={refreshing}>
             {refreshing ? 'Actualizando...' : 'Actualizar'}
           </button>
-          <button className="btn primary" onClick={openPanel}>Nuevo usuario</button>
+          <button className="btn primary" onClick={openCreate}>Nuevo usuario</button>
         </div>
       </div>
       <p className="page-header__subtitle">
@@ -147,6 +205,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
               <th>Rol</th>
               <th>Perfil</th>
               <th>Creado</th>
+              {canManageSuperadmin ? <th></th> : null}
             </tr>
           </thead>
           <tbody>
@@ -157,6 +216,12 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
                 <td>{roleLabels[user.role] || user.role}</td>
                 <td>{profileLabels[user.techProfile] || '-'}</td>
                 <td>{user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'}</td>
+                {canManageSuperadmin ? (
+                  <td style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn" type="button" onClick={() => handleEdit(user)}>Editar</button>
+                    <button className="btn" type="button" onClick={() => handleDelete(user.id)}>Eliminar</button>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -168,13 +233,13 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
 
       <SlidingPanel
         open={panelOpen}
-        title="Nuevo usuario"
+        title={isEditing ? 'Editar usuario' : 'Nuevo usuario'}
         onClose={closePanel}
         footer={(
           <>
             <button className="btn" onClick={handleCancel} disabled={saving}>Cancelar</button>
-            <button className="btn primary" onClick={onSubmit} disabled={saving}>
-              {saving ? 'Guardando...' : 'Guardar'}
+            <button className="btn primary" type="submit" disabled={saving}>
+              {saving ? 'Guardando...' : isEditing ? 'Actualizar' : 'Guardar'}
             </button>
           </>
         )}
@@ -202,16 +267,15 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
             />
           </div>
           <div className="form-field">
-            <label className="label" htmlFor="password">Contrasena</label>
+            <label className="label" htmlFor="password">Contrasena {isEditing ? '(opcional)' : ''}</label>
             <input
               id="password"
               className="input"
               type="password"
-              required
-              minLength={6}
               value={form.password}
               onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
             />
+            {isEditing ? <span className="input-hint">Deja en blanco para mantener la contraseña actual.</span> : null}
           </div>
           <div className="form-field">
             <label className="label" htmlFor="role">Rol</label>
