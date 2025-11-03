@@ -70,8 +70,8 @@ export async function POST(req: NextRequest) {
   await dbConnect();
 
   const [checklist, equipment] = await Promise.all([
-    Checklist.findById(checklistId).lean(),
-    Equipment.findById(equipmentId).lean()
+    Checklist.findById(checklistId).lean<Record<string, any>>(),
+    Equipment.findById(equipmentId).lean<Record<string, any>>()
   ]);
 
   if (!checklist) {

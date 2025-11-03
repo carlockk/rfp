@@ -8,6 +8,8 @@ import User from '@/models/User';
 import Notification from '@/models/Notification';
 import { buildComputedChecklistAlerts } from '@/lib/notifications';
 
+const STATUS_KEYS = ['ok', 'observado', 'critico'];
+
 const STATUS_LABELS = {
   ok: 'Cumple',
   observado: 'Caso NA',
@@ -90,7 +92,7 @@ function AdminDashboard({ metrics }) {
               {monthlyStats.map((item) => (
                 <div key={item.month} style={{ minWidth: 120 }}>
                   <div style={{ height: 150, display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-                    {['ok', 'observado', 'critico'].map((status) => {
+                    {STATUS_KEYS.map((status) => {
                       const value = item[status];
                       const percentage = item.total ? Math.round((value / item.total) * 100) : 0;
                       return (

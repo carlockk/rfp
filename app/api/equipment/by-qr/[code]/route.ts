@@ -30,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const equipment = await Equipment.findOne({
     code: new RegExp(`^${escapeRegex(normalizedCode)}$`, 'i'),
     isActive: true
-  }).lean();
+  }).lean<Record<string, any>>();
 
   if (!equipment) {
     return NextResponse.json({ error: 'Equipo no encontrado' }, { status: 404 });

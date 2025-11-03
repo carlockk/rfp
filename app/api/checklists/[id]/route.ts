@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const versionParam = searchParams.get('version');
   const includeInactive = searchParams.get('includeInactive') === 'true';
 
-  const checklist = await Checklist.findById(id).lean();
+  const checklist = await Checklist.findById(id).lean<Record<string, any>>();
   if (!checklist) {
     return NextResponse.json({ error: 'Checklist no encontrado' }, { status: 404 });
   }
@@ -186,7 +186,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     id,
     { isActive: false, deletedAt: new Date() },
     { new: true }
-  ).lean();
+  ).lean<Record<string, any>>();
 
   if (!updated) {
     return NextResponse.json({ error: 'Checklist no encontrado' }, { status: 404 });

@@ -43,8 +43,8 @@ export async function requirePermission(
   const normalizedKey = permissionKey.toLowerCase().trim();
 
   const [roleDoc, permissionDoc] = await Promise.all([
-    Role.findOne({ key: roleKey }).lean(),
-    Permission.findOne({ key: normalizedKey }).lean()
+    Role.findOne({ key: roleKey }).lean<Record<string, any>>(),
+    Permission.findOne({ key: normalizedKey }).lean<Record<string, any>>()
   ]);
 
   if (!roleDoc || !permissionDoc) return forbiddenResponse();

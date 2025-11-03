@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const includeComputed = searchParams.get('includeComputed') !== 'false';
   const limit = Number(searchParams.get('limit') || 20);
 
-  const query: Record<string, unknown> = {
+  const query: { $or: Array<Record<string, unknown>> } = {
     $or: [
       { audience: 'all' }
     ]

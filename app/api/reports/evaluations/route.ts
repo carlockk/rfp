@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
+import mongoose, { PipelineStage } from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import Evaluation from '@/models/Evaluation';
 import { requirePermission } from '@/lib/authz';
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
     match.technician = new mongoose.Types.ObjectId(session.id);
   }
 
-  const pipeline = [
+  const pipeline: PipelineStage[] = [
     { $match: match },
     {
       $group: {
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
         total: { $sum: 1 }
       }
     },
-    { $sort: { '_id.date': 1 } },
+    { $sort: { '_id.date': 1 as const } },
     {
       $project: {
         _id: 0,
