@@ -1,0 +1,23 @@
+{
+  "name": "Flota QR",
+  "short_name": "Flota QR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b4f6c",
+  "description": "Gestión de flota con QR, consumo y mantenciones.",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/flota.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/log.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    }
+  ]
+}

@@ -12,7 +12,10 @@ const EquipmentSchema = new mongoose.Schema({
   hourmeterBase: { type: Number, default: 0 },
   odometerBase: { type: Number, default: 0 },
   notes: String,
-  isActive: { type: Boolean, default: true }
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  assignedAt: { type: Date, default: null },
+  isActive: { type: Boolean, default: true },
+  deletedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 export default mongoose.models.Equipment || mongoose.model('Equipment', EquipmentSchema);

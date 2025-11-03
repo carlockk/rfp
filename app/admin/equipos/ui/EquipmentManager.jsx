@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import SlidingPanel from '@/app/ui/SlidingPanel';
+import SlidingPanel from '../../../ui/SlidingPanel';
 import EquipmentFormPanel from './EquipmentFormPanel';
-import BackButton from '@/app/ui/BackButton';
+import BackButton from '../../../ui/BackButton';
 
 const EMPTY_EQUIPMENT = {
   code: '',
@@ -22,12 +22,16 @@ const EMPTY_EQUIPMENT = {
 export default function EquipmentManager() {
   const [items, setItems] = useState([]);
   const [types, setTypes] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
   const [draft, setDraft] = useState(EMPTY_EQUIPMENT);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [assigningId, setAssigningId] = useState('');
+  const [assignError, setAssignError] = useState('');
+  const [assignInfo, setAssignInfo] = useState('');
 
   const hasDraftChanges = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(EMPTY_EQUIPMENT),
@@ -37,18 +41,24 @@ export default function EquipmentManager() {
   const refreshData = useCallback(async () => {
     try {
       setLoading(true);
-      const [equipmentsRes, typesRes] = await Promise.all([
+      const [equipmentsRes, typesRes, techniciansRes] = await Promise.all([
         fetch('/api/equipments', { cache: 'no-store' }),
-        fetch('/api/equipment-types', { cache: 'no-store' })
+        fetch('/api/equipment-types', { cache: 'no-store' }),
+        fetch('/api/users?role=tecnico', { cache: 'no-store' })
       ]);
       if (!equipmentsRes.ok) throw new Error('No se pudo cargar equipos');
       if (!typesRes.ok) throw new Error('No se pudo cargar tipos');
-      const [equipments, typesPayload] = await Promise.all([
+      if (!techniciansRes.ok) throw new Error('No se pudo cargar tecnicos');
+      const [equipments, typesPayload, techniciansPayload] = await Promise.all([
         equipmentsRes.json(),
-        typesRes.json()
+        typesRes.json(),
+        techniciansRes.json()
       ]);
       setItems(equipments);
       setTypes(typesPayload);
+      setTechnicians(techniciansPayload);
+      setAssignError('');
+      setAssignInfo('');
       setDraft((prev) => {
         if (prev.type || typesPayload.length === 0) return prev;
         return { ...prev, type: typesPayload[0].name };
@@ -64,6 +74,12 @@ export default function EquipmentManager() {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  useEffect(() => {
+    if (!assignInfo) return;
+    const timer = setTimeout(() => setAssignInfo(''), 3000);
+    return () => clearTimeout(timer);
+  }, [assignInfo]);
 
   async function handleCreateType(name) {
     const res = await fetch('/api/equipment-types', {
@@ -133,6 +149,36 @@ export default function EquipmentManager() {
     resetDraft();
   }
 
+  async function handleAssign(equipmentId, nextUserId) {
+    setAssigningId(equipmentId);
+    setAssignError('');
+    setAssignInfo('');
+    try {
+      const res = await fetch('/api/equipment/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          equipmentId,
+          userId: nextUserId || null
+        })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { equipment } = await res.json();
+      setItems((prev) =>
+        prev.map((item) =>
+          String(item._id) === equipment.id
+            ? { ...item, assignedTo: equipment.assignedTo, assignedAt: equipment.assignedAt }
+            : item
+        )
+      );
+      setAssignInfo('Asignacion actualizada');
+    } catch (err) {
+      setAssignError(err.message || 'No se pudo asignar el equipo');
+    } finally {
+      setAssigningId('');
+    }
+  }
+
   return (
     <div className="card card--page">
       <div className="page-header">
@@ -150,6 +196,8 @@ export default function EquipmentManager() {
       <p className="page-header__subtitle">Gestiona tu flota y agrega unidades desde este panel.</p>
 
       {error ? <div style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div> : null}
+      {assignError ? <div style={{ color: 'var(--danger)', marginBottom: 12 }}>{assignError}</div> : null}
+      {assignInfo ? <div style={{ color: 'var(--accent)', marginBottom: 12 }}>{assignInfo}</div> : null}
 
       {loading ? (
         <div>Cargando equipos...</div>
@@ -164,26 +212,44 @@ export default function EquipmentManager() {
                 <th>Tipo</th>
                 <th>Identificador</th>
                 <th>Combustible</th>
+                <th>Asignado a</th>
                 <th>Creado</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item._id}>
-                  <td>{item.code}</td>
-                  <td>{item.type}</td>
-                  <td>{item.brand} {item.model}</td>
-                  <td>{item.fuel}{item.adblue ? ' + AdBlue' : ''}</td>
-                  <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('es-CL') : '-'}</td>
-                  <td style={{ display: 'flex', gap: 8 }}>
-                    {/* Editar equipo (detalle/editar) */}
-                    <Link href={`/admin/equipos/${item._id}`} className="nav-link">Editar</Link>
-                    {/* QR del equipo */}
-                    <Link href={`/admin/equipos/qr/${item._id}`} className="nav-link">QR</Link>
-                  </td>
-                </tr>
-              ))}
+              {items.map((item) => {
+                const equipmentId = String(item._id);
+                const assignedValue = item.assignedTo ? String(item.assignedTo) : '';
+                return (
+                  <tr key={equipmentId}>
+                    <td>{item.code}</td>
+                    <td>{item.type}</td>
+                    <td>{item.brand} {item.model}</td>
+                    <td>{item.fuel}{item.adblue ? ' + AdBlue' : ''}</td>
+                    <td>
+                      <select
+                        className="input"
+                        value={assignedValue}
+                        onChange={(event) => handleAssign(equipmentId, event.target.value)}
+                        disabled={assigningId === equipmentId}
+                      >
+                        <option value="">Sin asignar</option>
+                        {technicians.map((tech) => (
+                          <option key={tech.id} value={tech.id}>
+                            {tech.name ? `${tech.name} (${tech.email})` : tech.email}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('es-CL') : '-'}</td>
+                    <td style={{ display: 'flex', gap: 8 }}>
+                      <Link href={`/admin/equipos/${equipmentId}`} className="nav-link">Editar</Link>
+                      <Link href={`/admin/equipos/qr/${equipmentId}`} className="nav-link">QR</Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

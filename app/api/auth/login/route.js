@@ -11,7 +11,7 @@ export async function POST(req){
   if (!user) return new Response('Unauthorized', { status:401 });
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return new Response('Unauthorized', { status:401 });
-  const token = signToken({ id:String(user._id), role:user.role });
+  const token = signToken({ id:String(user._id), role:user.role, techProfile: user.techProfile || '' });
   setAuthCookie(token);
-  return Response.json({ ok:true, role:user.role });
+  return Response.json({ ok:true, role:user.role, techProfile: user.techProfile || '' });
 }

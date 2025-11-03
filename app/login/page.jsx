@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
-import flotaLogo from '@/public/flota.png';
+import flotaLogo from '@/public/log.png';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -52,7 +52,7 @@ export default function LoginPage() {
             priority
             style={{ borderRadius: '50%' }}
           />
-          <span className="login-panel__brand">FLOTA</span>
+          <span className="login-panel__brand">R F P</span>
           <h1 className="login-panel__title">Iniciar sesión</h1>
         </div>
         <p className="login-panel__intro">

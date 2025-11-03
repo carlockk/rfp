@@ -1,72 +1,535 @@
+import { redirect } from 'next/navigation';
+import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import Equipment from '@/models/Equipment';
-import Reading from '@/models/Reading';
+import Evaluation from '@/models/Evaluation';
+import User from '@/models/User';
+import Notification from '@/models/Notification';
+import { buildComputedChecklistAlerts } from '@/lib/notifications';
 
-export default async function Dashboard() {
-  await dbConnect();
-  const totalEquipos = await Equipment.countDocuments();
-  const totalLecturas = await Reading.countDocuments();
-  const ultimas = await Reading.find({}).sort({ createdAt: -1 }).limit(5).lean();
+const STATUS_LABELS = {
+  ok: 'Cumple',
+  observado: 'Caso NA',
+  critico: 'No cumple'
+};
+
+const STATUS_COLORS = {
+  ok: '#2e7d32',
+  observado: '#f9a825',
+  critico: '#c62828'
+};
+
+function formatDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString();
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '-';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins === 0) return `${secs}s`;
+  return `${mins}m ${secs}s`;
+}
+
+function AdminDashboard({ metrics }) {
+  const {
+    totalEquipos,
+    activeTechnicians,
+    formsSubmitted,
+    criticalLast30,
+    monthlyStats,
+    recentCriticals,
+    notifications
+  } = metrics;
 
   return (
-    <>
+    <div className="dashboard">
       <div className="page-header">
         <div className="page-header__titles">
           <p className="page-header__eyebrow">Panel de administración</p>
-          <h1 className="page-header__title">Dashboard</h1>
+          <h1 className="page-header__title">Resumen general</h1>
         </div>
       </div>
-      <div className="row">
+
+      <div className="row" style={{ marginBottom: 24 }}>
         <div className="col">
-          <div className="card">
+          <div className="card kpi-card">
             <div className="kpi">{totalEquipos}</div>
-            <div className="label">Equipos</div>
+            <div className="label">Equipos registrados</div>
           </div>
         </div>
         <div className="col">
-          <div className="card">
-            <div className="kpi">{totalLecturas}</div>
-            <div className="label">Registros</div>
+          <div className="card kpi-card">
+            <div className="kpi">{activeTechnicians}</div>
+            <div className="label">Técnicos activos</div>
           </div>
         </div>
         <div className="col">
-          <div className="card">
-            <div className="kpi">OK</div>
-            <div className="label">Estado</div>
+          <div className="card kpi-card">
+            <div className="kpi">{formsSubmitted}</div>
+            <div className="label">Formularios enviados</div>
           </div>
         </div>
-        <div className="col" style={{ flexBasis: '100%' }}>
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>Últimos registros</h3>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Equipo</th>
-                  <th>Tipo</th>
-                  <th>Horómetro</th>
-                  <th>Km</th>
-                  <th>Litros</th>
-                  <th>kWh</th>
-                  <th>Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ultimas.map((r) => (
-                  <tr key={r._id}>
-                    <td>{String(r.equipmentId)}</td>
-                    <td>{r.kind}</td>
-                    <td>{r.hourmeter ?? '-'}</td>
-                    <td>{r.odometer ?? '-'}</td>
-                    <td>{r.liters ?? '-'}</td>
-                    <td>{r.kwh ?? '-'}</td>
-                    <td>{new Date(r.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{criticalLast30}</div>
+            <div className="label">Fallas críticas (30 días)</div>
           </div>
         </div>
       </div>
-    </>
+
+      <div className="row" style={{ marginBottom: 24 }}>
+        <div className="col" style={{ flexBasis: '60%' }}>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Reportes por mes</h3>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              {monthlyStats.map((item) => (
+                <div key={item.month} style={{ minWidth: 120 }}>
+                  <div style={{ height: 150, display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+                    {['ok', 'observado', 'critico'].map((status) => {
+                      const value = item[status];
+                      const percentage = item.total ? Math.round((value / item.total) * 100) : 0;
+                      return (
+                        <div
+                          key={status}
+                          title={`${STATUS_LABELS[status]}: ${value}`}
+                          style={{
+                            width: 18,
+                            height: `${percentage || (value ? 10 : 2)}%`,
+                            background: STATUS_COLORS[status],
+                            borderRadius: 4,
+                            minHeight: value ? 8 : 2
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <p className="label" style={{ marginTop: 8, textAlign: 'center' }}>
+                    {item.month}
+                    <br />
+                    <strong>{item.total}</strong> reportes
+                  </p>
+                </div>
+              ))}
+              {!monthlyStats.length ? (
+                <p className="label" style={{ color: 'var(--muted)' }}>
+                  Aún no hay evaluaciones en los últimos meses.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="col" style={{ flexBasis: '40%' }}>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Alertas inteligentes</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {notifications.length ? (
+                notifications.map((alert) => (
+                  <div
+                    key={alert.id}
+                    style={{
+                      borderLeft: `4px solid ${alert.level === 'high' ? '#c62828' : alert.level === 'medium' ? '#f9a825' : '#1976d2'}`,
+                      background: 'var(--surface)',
+                      padding: '8px 12px'
+                    }}
+                  >
+                    <p style={{ margin: 0, fontWeight: 600 }}>{alert.message}</p>
+                    <span className="label">{formatDate(alert.createdAt)}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="label" style={{ color: 'var(--muted)' }}>No hay alertas activas.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Fallas críticas recientes</h3>
+        <div className="table-wrapper">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Checklist</th>
+                <th>Equipo</th>
+                <th>Técnico</th>
+                <th>Duración</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentCriticals.map((item) => (
+                <tr key={item._id.toString()}>
+                  <td>{formatDate(item.completedAt)}</td>
+                  <td>{item.checklist?.name || '-'}</td>
+                  <td>{item.equipment?.code || '-'}</td>
+                  <td>{item.technician?.name || item.technician?.email || '-'}</td>
+                  <td>{formatDuration(item.durationSeconds)}</td>
+                  <td>{item.observations || '-'}</td>
+                </tr>
+              ))}
+              {!recentCriticals.length ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
+                    No hay fallas críticas recientes.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TechnicianDashboard({ data }) {
+  const {
+    assignedEquipments,
+    equipmentStatuses,
+    recentEvaluations,
+    notifications
+  } = data;
+
+  return (
+    <div className="dashboard">
+      <div className="page-header">
+        <div className="page-header__titles">
+          <p className="page-header__eyebrow">Panel del técnico</p>
+          <h1 className="page-header__title">Mis equipos y formularios</h1>
+        </div>
+      </div>
+
+      <div className="row" style={{ marginBottom: 24 }}>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{assignedEquipments.length}</div>
+            <div className="label">Equipos asignados</div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{recentEvaluations.length}</div>
+            <div className="label">Evaluaciones recientes</div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{notifications.length}</div>
+            <div className="label">Alertas pendientes</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row" style={{ marginBottom: 24 }}>
+        <div className="col" style={{ flexBasis: '60%' }}>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Estado de mis equipos</h3>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Equipo</th>
+                    <th>Tipo</th>
+                    <th>Último estado</th>
+                    <th>Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assignedEquipments.map((equipment) => {
+                    const status = equipmentStatuses[equipment.id];
+                    return (
+                      <tr key={equipment.id}>
+                        <td>{equipment.code}</td>
+                        <td>{equipment.type || '-'}</td>
+                        <td>
+                          {status ? (
+                            <span
+                              style={{
+                                background: `${(STATUS_COLORS[status.status] || '#607d8b')}22`,
+                                color: STATUS_COLORS[status.status] || '#607d8b',
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                fontSize: 12
+                              }}
+                            >
+                              {STATUS_LABELS[status.status] || status.status}
+                            </span>
+                          ) : (
+                            'Sin registro'
+                          )}
+                        </td>
+                        <td>{status ? formatDate(status.completedAt) : '-'}</td>
+                      </tr>
+                    );
+                  })}
+                  {!assignedEquipments.length ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
+                        No tienes equipos asignados actualmente.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div className="col" style={{ flexBasis: '40%' }}>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Alertas</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {notifications.length ? (
+                notifications.map((alert) => (
+                  <div
+                    key={alert.id}
+                    style={{
+                      borderLeft: `4px solid ${alert.level === 'high' ? '#c62828' : alert.level === 'medium' ? '#f9a825' : '#1976d2'}`,
+                      background: 'var(--surface)',
+                      padding: '8px 12px'
+                    }}
+                  >
+                    <p style={{ margin: 0, fontWeight: 600 }}>{alert.message}</p>
+                    <span className="label">{formatDate(alert.createdAt)}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="label" style={{ color: 'var(--muted)' }}>No tienes alertas pendientes.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Últimas evaluaciones</h3>
+        <div className="table-wrapper">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Checklist</th>
+                <th>Equipo</th>
+                <th>Estado</th>
+                <th>Duración</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentEvaluations.map((item) => (
+                <tr key={item._id.toString()}>
+                  <td>{formatDate(item.completedAt)}</td>
+                  <td>{item.checklist?.name || '-'}</td>
+                  <td>{item.equipment?.code || '-'}</td>
+                  <td>
+                    <span
+                      style={{
+                        background: `${(STATUS_COLORS[item.status] || '#607d8b')}22`,
+                        color: STATUS_COLORS[item.status] || '#607d8b',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        fontSize: 12
+                      }}
+                    >
+                      {STATUS_LABELS[item.status] || item.status}
+                    </span>
+                  </td>
+                  <td>{formatDuration(item.durationSeconds)}</td>
+                </tr>
+              ))}
+              {!recentEvaluations.length ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
+                    No has enviado evaluaciones recientemente.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default async function Dashboard() {
+  await dbConnect();
+  const session = await getSession();
+  if (!session) redirect('/login');
+
+  if (session.role === 'tecnico') {
+    const assignedEquipmentsDocs = await Equipment.find({
+      isActive: true,
+      assignedTo: session.id
+    })
+      .select('code type')
+      .sort({ code: 1 })
+      .lean();
+
+    const assignedEquipments = assignedEquipmentsDocs.map((item) => ({
+      id: item._id.toString(),
+      code: item.code,
+      type: item.type || ''
+    }));
+
+    const recentEvaluations = await Evaluation.find({ technician: session.id })
+      .sort({ completedAt: -1 })
+      .limit(6)
+      .populate('checklist', 'name')
+      .populate('equipment', 'code type')
+      .lean();
+
+    const equipmentIds = assignedEquipmentsDocs.map((item) => item._id);
+
+    const lastEvaluations = equipmentIds.length
+      ? await Evaluation.aggregate([
+          { $match: { equipment: { $in: equipmentIds }, completedAt: { $exists: true } } },
+          { $sort: { completedAt: -1 } },
+          {
+            $group: {
+              _id: '$equipment',
+              status: { $first: '$status' },
+              completedAt: { $first: '$completedAt' }
+            }
+          }
+        ])
+      : [];
+
+    const equipmentStatuses = lastEvaluations.reduce((acc, item) => {
+      acc[item._id.toString()] = {
+        status: item.status,
+        completedAt: item.completedAt
+      };
+      return acc;
+    }, {});
+
+    const recipientFilter = mongoose.isValidObjectId(session.id)
+      ? [{ recipients: new mongoose.Types.ObjectId(session.id) }]
+      : [];
+
+    const notifications = await Notification.find({
+      $or: [
+        { audience: 'all' },
+        { audience: 'technician' },
+        ...recipientFilter
+      ]
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+
+    const cleanNotifications = notifications.map((item) => ({
+      id: item._id.toString(),
+      message: item.message,
+      level: item.level,
+      createdAt: item.createdAt
+    }));
+
+    return (
+      <TechnicianDashboard
+        data={{
+          assignedEquipments,
+          equipmentStatuses,
+          recentEvaluations,
+          notifications: cleanNotifications
+        }}
+      />
+    );
+  }
+
+  const since = new Date();
+  since.setMonth(since.getMonth() - 5);
+  since.setDate(1);
+  since.setHours(0, 0, 0, 0);
+
+  const [
+    totalEquipos,
+    activeTechnicians,
+    formsSubmitted,
+    criticalLast30,
+    monthlyStatsRaw,
+    recentCriticals,
+    notificationsRaw,
+    computedAlerts
+  ] = await Promise.all([
+    Equipment.countDocuments({ isActive: true }),
+    User.countDocuments({ role: 'tecnico' }),
+    Evaluation.countDocuments(),
+    Evaluation.countDocuments({
+      status: 'critico',
+      completedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+    }),
+    Evaluation.aggregate([
+      { $match: { completedAt: { $gte: since } } },
+      {
+        $group: {
+          _id: { year: { $year: '$completedAt' }, month: { $month: '$completedAt' } },
+          total: { $sum: 1 },
+          ok: { $sum: { $cond: [{ $eq: ['$status', 'ok'] }, 1, 0] } },
+          observado: { $sum: { $cond: [{ $eq: ['$status', 'observado'] }, 1, 0] } },
+          critico: { $sum: { $cond: [{ $eq: ['$status', 'critico'] }, 1, 0] } }
+        }
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ]),
+    Evaluation.find({ status: 'critico' })
+      .sort({ completedAt: -1 })
+      .limit(6)
+      .populate('checklist', 'name')
+      .populate('equipment', 'code type')
+      .populate('technician', 'name email')
+      .lean(),
+    Notification.find({ $or: [{ audience: 'all' }, { audience: 'admin' }] })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+    buildComputedChecklistAlerts()
+  ]);
+
+  const monthlyStats = monthlyStatsRaw.map((item) => {
+    const year = item._id.year;
+    const month = item._id.month - 1;
+    const label = new Date(year, month, 1).toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+    return {
+      month: label,
+      total: item.total,
+      ok: item.ok,
+      observado: item.observado,
+      critico: item.critico
+    };
+  });
+
+  const notifications = [
+    ...computedAlerts.map((alert) => ({
+      id: alert.id,
+      message: alert.message,
+      level: alert.level,
+      createdAt: alert.createdAt
+    })),
+    ...notificationsRaw.map((item) => ({
+      id: item._id.toString(),
+      message: item.message,
+      level: item.level,
+      createdAt: item.createdAt
+    }))
+  ].slice(0, 6);
+
+  return (
+    <AdminDashboard
+      metrics={{
+        totalEquipos,
+        activeTechnicians,
+        formsSubmitted,
+        criticalLast30,
+        monthlyStats,
+        recentCriticals,
+        notifications
+      }}
+    />
   );
 }

@@ -1,23 +1,29 @@
 'use client';
 
-import { useState } from 'react';
-import SlidingPanel from '@/app/ui/SlidingPanel';
-import BackButton from '@/app/ui/BackButton';
+import { useMemo, useState } from 'react';
+import SlidingPanel from '../../../ui/SlidingPanel';
+import BackButton from '../../../ui/BackButton';
 
 const defaultForm = {
   name: '',
   email: '',
   password: '',
-  role: 'tecnico'
+  role: 'tecnico',
+  techProfile: 'externo'
 };
 
 const roleLabels = {
   superadmin: 'Super admin',
   admin: 'Admin',
-  tecnico: 'Técnico'
+  tecnico: 'Tecnico'
 };
 
-export default function UsersManager({ initialUsers }) {
+const profileLabels = {
+  externo: 'Tecnico externo',
+  candelaria: 'Tecnico Candelaria'
+};
+
+export default function UsersManager({ initialUsers, canManageSuperadmin }) {
   const [users, setUsers] = useState(initialUsers);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
@@ -25,6 +31,13 @@ export default function UsersManager({ initialUsers }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
+
+  const availableRoles = useMemo(
+    () => (canManageSuperadmin ? ['tecnico', 'admin', 'superadmin'] : ['tecnico', 'admin']),
+    [canManageSuperadmin]
+  );
+
+  const techProfiles = useMemo(() => ['externo', 'candelaria'], []);
 
   async function refresh() {
     setRefreshing(true);
@@ -65,7 +78,13 @@ export default function UsersManager({ initialUsers }) {
     setSuccess('');
 
     if (form.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+      setError('La contrasena debe tener al menos 6 caracteres');
+      setSaving(false);
+      return;
+    }
+
+    if (!availableRoles.includes(form.role)) {
+      setError('Rol no permitido');
       setSaving(false);
       return;
     }
@@ -101,7 +120,7 @@ export default function UsersManager({ initialUsers }) {
         <div className="page-header__left">
           <BackButton fallback="/" />
           <div className="page-header__titles">
-            <p className="page-header__eyebrow">Panel de administración</p>
+            <p className="page-header__eyebrow">Panel de administracion</p>
             <h1 className="page-header__title">Usuarios</h1>
           </div>
         </div>
@@ -113,7 +132,7 @@ export default function UsersManager({ initialUsers }) {
         </div>
       </div>
       <p className="page-header__subtitle">
-        Desde aquí puedes crear cuentas para administradores y técnicos.
+        Desde aqui puedes crear cuentas para administradores y tecnicos.
       </p>
 
       {error && !panelOpen ? <div style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div> : null}
@@ -126,6 +145,7 @@ export default function UsersManager({ initialUsers }) {
               <th>Nombre</th>
               <th>Email</th>
               <th>Rol</th>
+              <th>Perfil</th>
               <th>Creado</th>
             </tr>
           </thead>
@@ -135,6 +155,7 @@ export default function UsersManager({ initialUsers }) {
                 <td>{user.name || '-'}</td>
                 <td>{user.email}</td>
                 <td>{roleLabels[user.role] || user.role}</td>
+                <td>{profileLabels[user.techProfile] || '-'}</td>
                 <td>{user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'}</td>
               </tr>
             ))}
@@ -181,7 +202,7 @@ export default function UsersManager({ initialUsers }) {
             />
           </div>
           <div className="form-field">
-            <label className="label" htmlFor="password">Contraseña</label>
+            <label className="label" htmlFor="password">Contrasena</label>
             <input
               id="password"
               className="input"
@@ -198,13 +219,39 @@ export default function UsersManager({ initialUsers }) {
               id="role"
               className="input"
               value={form.role}
-              onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
+              onChange={(event) => {
+                const nextRole = event.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  role: nextRole,
+                  techProfile: nextRole === 'tecnico' ? (prev.techProfile || 'externo') : ''
+                }));
+              }}
             >
-              <option value="tecnico">Técnico</option>
-              <option value="admin">Admin</option>
-              <option value="superadmin">Super admin</option>
+              {availableRoles.map((role) => (
+                <option key={role} value={role}>
+                  {roleLabels[role]}
+                </option>
+              ))}
             </select>
           </div>
+          {form.role === 'tecnico' ? (
+            <div className="form-field">
+              <label className="label" htmlFor="techProfile">Perfil tecnico</label>
+              <select
+                id="techProfile"
+                className="input"
+                value={form.techProfile}
+                onChange={(event) => setForm((prev) => ({ ...prev, techProfile: event.target.value }))}
+              >
+                {techProfiles.map((profile) => (
+                  <option key={profile} value={profile}>
+                    {profileLabels[profile]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           {error ? <span className="input-hint error">{error}</span> : null}
           {success ? <span className="input-hint" style={{ color: 'var(--accent)' }}>{success}</span> : null}
         </form>

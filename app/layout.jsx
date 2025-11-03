@@ -1,26 +1,43 @@
 import './globals.css';
 import { Suspense } from 'react';
 import SidebarContainer from './ui/SidebarContainer';
+import OfflineBanner from './ui/OfflineBanner';
+import OfflineSyncManager from './ui/OfflineSyncManager';
 import { getSession } from '@/lib/auth';
 
 export const metadata = {
   title: process.env.NEXT_PUBLIC_APP_NAME || 'Flota QR',
-  description: 'Gestión de flota con QR, consumo y mantenciones'
+  description: 'Gestión de flota con QR, consumo y mantenciones',
+  manifest: '/manifest.json',
+  themeColor: '#0b4f6c',
+  icons: [
+    { rel: 'icon', url: '/log.png', sizes: '256x256' },
+    { rel: 'apple-touch-icon', url: '/flota.png', sizes: '512x512' }
+  ]
 };
 
 export default async function RootLayout({ children }) {
   const session = await getSession();
   const isAuthenticated = Boolean(session);
-  const navLinks = [
-    { href: '/', label: 'Dashboard' },
-    { href: '/admin/equipos', label: 'Equipos' },
-    { href: '/admin/reportes', label: 'Reportes' },
-    { href: '/admin/usuarios', label: 'Usuarios' }
-  ];
+  const navLinks =
+    session?.role === 'tecnico'
+      ? [
+          { href: '/', label: 'Mis equipos' }
+        ]
+      : [
+          { href: '/', label: 'Dashboard' },
+          { href: '/admin/equipos', label: 'Equipos' },
+          { href: '/admin/checklists', label: 'Checklists' },
+          { href: '/admin/checklists/historial', label: 'Historial' },
+          { href: '/admin/reportes', label: 'Reportes' },
+          { href: '/admin/usuarios', label: 'Usuarios' }
+        ];
 
   return (
     <html lang='es' data-theme='light'>
       <body>
+        <OfflineBanner />
+        <OfflineSyncManager />
         {isAuthenticated ? (
           <div className='app-shell'>
             <SidebarContainer links={navLinks} />
