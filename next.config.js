@@ -7,6 +7,7 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   cacheOnFrontEndNav: true,
+  importScripts: ['/custom-sw.js'],
   disable: process.env.NODE_ENV === 'development',
   runtimeCaching,
   buildExcludes: [/middleware-manifest\.json$/]

@@ -5,6 +5,9 @@ import Evaluation from '@/models/Evaluation';
 import Checklist from '@/models/Checklist';
 import Equipment from '@/models/Equipment';
 import Notification from '@/models/Notification';
+import PushSubscription from '@/models/PushSubscription';
+import User from '@/models/User';
+import { broadcastPush, isPushAvailable } from '@/lib/push';
 import { getSession } from '@/lib/auth';
 import { requirePermission } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
@@ -144,8 +147,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (status === 'critico') {
-    await Notification.create({
-      message: `Falla crítica detectada en ${equipment.code} (${checklist.name}).`,
+    const notification = await Notification.create({
+      message: `Falla critica detectada en ${equipment.code} (${checklist.name}).`,
       type: 'alert',
       level: 'high',
       audience: 'admin',
@@ -156,6 +159,36 @@ export async function POST(req: NextRequest) {
         technicianId: session.id
       }
     });
+
+    if (isPushAvailable()) {
+      const adminUsers = await User.find({ role: { $in: ['admin', 'superadmin'] } })
+        .select('_id')
+        .lean();
+      const adminIds = adminUsers.map((item) => item._id.toString());
+      if (adminIds.length) {
+        const subscriptions = await PushSubscription.find({ user: { $in: adminIds } }).lean<Array<{
+          _id: mongoose.Types.ObjectId;
+          endpoint: string;
+          keys: { p256dh: string; auth: string };
+        }>>();
+        if (subscriptions.length) {
+          await broadcastPush(subscriptions, {
+            title: 'Alerta critica detectada',
+            body: `${equipment.code} - ${checklist.name}` ,
+            badge: '/log.png',
+            icon: '/log.png',
+            tag: 'critical-evaluation',
+            renotify: true,
+            data: {
+              url: '/admin/reportes',
+              evaluationId: evaluation._id.toString(),
+              notificationId: notification._id.toString(),
+              equipmentId: equipment._id.toString()
+            }
+          });
+        }
+      }
+    }
   }
 
   await logAudit({
@@ -251,3 +284,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(evaluations);
 }
+
+
+

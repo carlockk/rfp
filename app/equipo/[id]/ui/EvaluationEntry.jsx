@@ -45,6 +45,11 @@ export default function EvaluationEntry({
   const [feedback, setFeedback] = useState('');
 
   useEffect(() => {
+    setActiveEquipmentId(assignedToUser || sessionRole !== 'tecnico' ? equipment.id : '');
+    setFeedback('');
+  }, [equipment.id, assignedToUser, sessionRole]);
+
+  useEffect(() => {
     if (
       sessionRole === 'tecnico' &&
       !assignedToUser &&
@@ -59,6 +64,14 @@ export default function EvaluationEntry({
     activeEquipmentId && equipmentMap[activeEquipmentId]
       ? equipmentMap[activeEquipmentId]
       : (assignedToUser || sessionRole !== 'tecnico' ? equipment : null);
+
+  const displayEquipment = targetEquipment || equipment;
+  const isAssignedDisplay =
+    sessionRole !== 'tecnico'
+      ? true
+      : displayEquipment.id === equipment.id
+        ? assignedToUser
+        : true;
 
   const checklists =
     targetEquipment
@@ -77,9 +90,9 @@ export default function EvaluationEntry({
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <h3 style={{ margin: 0 }}>{equipment.code} - {equipment.type}</h3>
+          <h3 style={{ margin: 0 }}>{displayEquipment.code} - {displayEquipment.type}</h3>
           <div className="label">
-            {equipment.brand} {equipment.model}{equipment.plate ? ` - ${equipment.plate}` : ''}
+            {displayEquipment.brand} {displayEquipment.model}{displayEquipment.plate ? ` - ${displayEquipment.plate}` : ''}
           </div>
           <div className="label" style={{ marginTop: 4 }}>
             Perfil tecnico: {variant === 'candelaria' ? 'Tecnico Candelaria' : 'Tecnico externo'}
@@ -91,14 +104,14 @@ export default function EvaluationEntry({
       <div className="info-block" style={{ marginBottom: 16 }}>
         <p className="label">Detalle del equipo escaneado</p>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
-          <li>Combustible: {equipment.fuel || 'N/D'}{equipment.adblue ? ' + AdBlue' : ''}</li>
-          <li>Asignado a ti: {assignedToUser ? 'Si' : 'No'}</li>
+          <li>Combustible: {displayEquipment.fuel || 'N/D'}{displayEquipment.adblue ? ' + AdBlue' : ''}</li>
+          <li>Asignado a ti: {isAssignedDisplay ? 'Si' : 'No'}</li>
         </ul>
       </div>
 
       {sessionRole === 'tecnico' ? (
         <div style={{ marginBottom: 16 }}>
-          {!assignedToUser ? (
+          {displayEquipment.id === equipment.id && !assignedToUser ? (
             <div className="alert" style={{ background: 'rgba(240, 68, 56, 0.1)', padding: 12, borderRadius: 8, color: '#c62828', marginBottom: 12 }}>
               Esta maquina o equipo no esta asociada a tu usuario.
             </div>

@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import SidebarContainer from './ui/SidebarContainer';
 import OfflineBanner from './ui/OfflineBanner';
 import OfflineSyncManager from './ui/OfflineSyncManager';
+import PushRegistration from './ui/PushRegistration';
 import { getSession } from '@/lib/auth';
 
 export const metadata = {
@@ -22,7 +23,8 @@ export default async function RootLayout({ children }) {
   const navLinks =
     session?.role === 'tecnico'
       ? [
-          { href: '/', label: 'Mis equipos' }
+          { href: '/', label: 'Mis equipos' },
+          { href: '/equipo/scan', label: 'Escanear QR' }
         ]
       : [
           { href: '/', label: 'Dashboard' },
@@ -43,6 +45,7 @@ export default async function RootLayout({ children }) {
             <SidebarContainer links={navLinks} />
             <div className='app-main'>
               <div className='construction-bar' aria-hidden='true'></div>
+              <PushRegistration role={session?.role} />
               <main className='app-content'>
                 <Suspense fallback={<div className='card'>Cargando...</div>}>
                   {children}

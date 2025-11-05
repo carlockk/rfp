@@ -28,7 +28,7 @@ const buildInitialAnswers = (nodes = []) => {
           answers[item.key] = [];
         } else if (item.inputType === 'checkbox') {
           answers[item.key] = false;
-        } else {
+      } else {
           answers[item.key] = '';
         }
       }
@@ -61,8 +61,8 @@ const findNodeByKey = (nodes, key) => {
   for (const node of nodes) {
     if (node.key === key) return node;
     if (node.children) {
-      const result = findNodeByKey(node.children, key);
-      if (result) return result;
+    const result = findNodeByKey(node.children, key);
+    if (result) return result;
     }
   }
   return null;
@@ -73,6 +73,8 @@ export default function EvaluationForm({ equipment, checklists, variant, onSubmi
   const [status, setStatus] = useState('ok');
   const [observations, setObservations] = useState('');
   const [answers, setAnswers] = useState({});
+  const [hourmeter, setHourmeter] = useState('');
+  const [odometer, setOdometer] = useState('');
   const [shift, setShift] = useState('dia');
   const [supervisor, setSupervisor] = useState('');
   const [info, setInfo] = useState('');
@@ -106,6 +108,8 @@ export default function EvaluationForm({ equipment, checklists, variant, onSubmi
 
   useEffect(() => {
     startRef.current = new Date();
+    setHourmeter('');
+    setOdometer('');
   }, [checklistId, equipment.id]);
 
   const updateAnswer = (key, value) => {
@@ -289,81 +293,111 @@ export default function EvaluationForm({ equipment, checklists, variant, onSubmi
     setInfo('');
 
     if (!checklistId || !selectedChecklist) {
-      setError('Selecciona un checklist');
-      setBusy(false);
+    setError('Selecciona un checklist');
+    setBusy(false);
       return;
     }
 
-    const missing = validateRequired();
-    if (missing && missing.length) {
-      setError(`Completa los campos obligatorios: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '...' : ''}`);
-      setBusy(false);
-      return;
+  const missing = validateRequired();
+  if (missing && missing.length) {
+    setError(`Completa los campos obligatorios: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '...' : ''}`);
+    setBusy(false);
+    return;
+  }
+
+  const hourValue = hourmeter.trim() !== '' ? Number(hourmeter) : null;
+  const odoValue = odometer.trim() !== '' ? Number(odometer) : null;
+
+  if (hourValue !== null && (!Number.isFinite(hourValue) || hourValue < 0)) {
+    setError('Ingresa un valor valido para el horometro.');
+    setBusy(false);
+    return;
+  }
+  if (odoValue !== null && (!Number.isFinite(odoValue) || odoValue < 0)) {
+    setError('Ingresa un valor valido para el odometro.');
+    setBusy(false);
+    return;
+  }
+  if (hourValue === null && odoValue === null) {
+    setError('Debes registrar al menos el horometro u odometro actual.');
+    setBusy(false);
+    return;
+  }
+
+  try {
+    const responses = [];
+    collectResponses(selectedChecklist.nodes || [], answers, responses);
+
+    responses.push({ itemKey: 'estado_general', value: status, note: '' });
+    responses.push({ itemKey: 'observaciones', value: observations, note: '' });
+
+    if (hourValue !== null) {
+      responses.push({ itemKey: 'horometro_actual', value: hourValue, note: '' });
+    }
+    if (odoValue !== null) {
+      responses.push({ itemKey: 'odometro_actual', value: odoValue, note: '' });
     }
 
-    try {
-      const responses = [];
-      collectResponses(selectedChecklist.nodes || [], answers, responses);
+    const formData = {
+      ...answers,
+      estado_general: status,
+      observaciones,
+      checklistId,
+      checklistNombre: selectedChecklist.name,
+      variante: variant,
+      equipo: equipment.code,
+      horometro_actual: hourValue,
+      odometro_actual: odoValue
+    };
 
-      responses.push({ itemKey: 'estado_general', value: status, note: '' });
-      responses.push({ itemKey: 'observaciones', value: observations, note: '' });
+    if (variant === 'candelaria') {
+      responses.push({ itemKey: 'turno', value: shift, note: '' });
+      responses.push({ itemKey: 'supervisor', value: supervisor, note: '' });
+      formData.turno = shift;
+      formData.supervisor = supervisor;
+    }
 
-      const formData = {
-        ...answers,
-        estado_general: status,
-        observaciones,
-        checklistId,
-        checklistNombre: selectedChecklist.name,
-        variante: variant,
-        equipo: equipment.code
-      };
+    const finishedAt = new Date();
+    const startedAt = startRef.current;
+    const durationSeconds = Math.max(0, Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000));
 
-      if (variant === 'candelaria') {
-        responses.push({ itemKey: 'turno', value: shift, note: '' });
-        responses.push({ itemKey: 'supervisor', value: supervisor, note: '' });
-        formData.turno = shift;
-        formData.supervisor = supervisor;
-      }
+    const payload = {
+      checklistId,
+      equipmentId: equipment.id,
+      status,
+      observations,
+      responses,
+      startedAt: startedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      durationSeconds,
+      formData,
+      completedAt: finishedAt.toISOString(),
+      checklistVersion: selectedChecklist.version || 1
+    };
 
-      const finishedAt = new Date();
-      const startedAt = startRef.current;
-      const durationSeconds = Math.max(0, Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000));
+    const result = await submitEvaluation(payload);
+    if (result?.queued) {
+      setInfo('Sin conexion: evaluacion encolada y se enviara al reconectar.');
+    } else {
+      setInfo('Evaluacion registrada correctamente.');
+    }
 
-      const payload = {
-        checklistId,
-        equipmentId: equipment.id,
-        status,
-        observations,
-        responses,
-        startedAt: startedAt.toISOString(),
-        finishedAt: finishedAt.toISOString(),
-        durationSeconds,
-        formData,
-        completedAt: finishedAt.toISOString(),
-        checklistVersion: selectedChecklist.version || 1
-      };
-
-      const result = await submitEvaluation(payload);
-      if (result?.queued) {
-        setInfo('Sin conexión: evaluación encolada y se enviará al reconectar.');
-      } else {
-        setInfo('Evaluación registrada correctamente.');
-      }
-
-      setObservations('');
-      setStatus('ok');
-      if (variant === 'candelaria') {
-        setSupervisor('');
-        setShift('dia');
-      }
-      const initialAnswers = buildInitialAnswers(selectedChecklist.nodes || []);
-      setAnswers(initialAnswers);
-      onSubmitted?.(true);
-      startRef.current = new Date();
-    } catch (err) {
-      setError(err.message || 'Error al guardar evaluación');
-    } finally {
-      setBusy(false);
+    setObservations('');
+    setStatus('ok');
+    setHourmeter('');
+    setOdometer('');
+    if (variant === 'candelaria') {
+      setSupervisor('');
+      setShift('dia');
+    }
+    const initialAnswers = buildInitialAnswers(selectedChecklist.nodes || []);
+    setAnswers(initialAnswers);
+    onSubmitted?.(true);
+    startRef.current = new Date();
+  } catch (err) {
+    setError(err.message || 'Error al guardar evaluación');
+  } finally {
+    setBusy(false);
     }
   };
 
@@ -391,6 +425,37 @@ export default function EvaluationForm({ equipment, checklists, variant, onSubmi
         ) : (
           <p className="label">No hay campos configurados para este checklist.</p>
         )}
+      </div>
+      <div className="form-field">
+        <label className="label" htmlFor="hourmeter">Horometro / horas actuales</label>
+        <input
+          id="hourmeter"
+          className="input"
+          type="number"
+          min="0"
+          step="0.1"
+          value={hourmeter}
+          onChange={(event) => setHourmeter(event.target.value)}
+          placeholder="Ej: 1234.5"
+          required={odometer.trim() === ''}
+        />
+        <span className="input-hint">Ingresa las horas acumuladas. Si no aplica, completa el odometro.</span>
+      </div>
+
+      <div className="form-field">
+        <label className="label" htmlFor="odometer">Odometro / kilometraje actual</label>
+        <input
+          id="odometer"
+          className="input"
+          type="number"
+          min="0"
+          step="1"
+          value={odometer}
+          onChange={(event) => setOdometer(event.target.value)}
+          placeholder="Ej: 48000"
+          required={hourmeter.trim() === ''}
+        />
+        <span className="input-hint">Si no registra kilometraje, completa el horometro.</span>
       </div>
 
       <div className="form-field">
@@ -463,3 +528,4 @@ export default function EvaluationForm({ equipment, checklists, variant, onSubmi
     </form>
   );
 }
+
