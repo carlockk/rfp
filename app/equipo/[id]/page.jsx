@@ -3,9 +3,10 @@ import { dbConnect } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import Equipment from '@/models/Equipment';
 import Checklist from '@/models/Checklist';
-import EvaluationEntry from './ui/EvaluationEntry';
-import BackButton from '@/app/ui/BackButton';
 import { serializeChecklist } from '@/lib/checklists';
+import EvaluationTemplate from '@/models/EvaluationTemplate';
+import { normalizeTemplateDoc } from '@/lib/evaluationTemplates';
+import EvaluationEntry from './ui/EvaluationEntry';
 
 export default async function Page({ params }) {
   await dbConnect();
@@ -74,25 +75,31 @@ export default async function Page({ params }) {
 
   const serialized = checklistsRaw.map((doc) => serializeChecklist(doc, true));
 
-  const checklistsByType = serialized.reduce((acc, item) => {
-    const key = (item.equipmentType || '').toLowerCase();
-    const normalizedKey = key || 'default';
-    if (!acc[normalizedKey]) acc[normalizedKey] = [];
+  const checklists = serialized.map((item) => ({
+    id: item.id,
+    name: item.name,
+    equipmentType: (item.equipmentType || '').toLowerCase(),
+    equipmentTypes: Array.isArray(item.equipmentTypes) ? item.equipmentTypes : [],
+    equipmentIds: Array.isArray(item.equipmentIds) ? item.equipmentIds : [],
+    allowedProfiles: Array.isArray(item.allowedProfiles) ? item.allowedProfiles : [],
+    mandatoryProfiles: Array.isArray(item.mandatoryProfiles) ? item.mandatoryProfiles : [],
+    version: item.currentVersion || 1,
+    nodes: item.structure || [],
+    notes: item.currentVersionNotes || '',
+    isActive: item.isActive !== false
+  }));
 
-    acc[normalizedKey].push({
-      id: item.id,
-      name: item.name,
-      equipmentType: item.equipmentType || '',
-      version: item.currentVersion || 1,
-      nodes: item.structure || [],
-      notes: item.currentVersionNotes || ''
-    });
-    return acc;
-  }, { default: [] });
+  const templateDocs = await EvaluationTemplate.find({
+    isActive: true,
+    $or: [
+      { techProfile: 'todos' },
+      { techProfile: session.techProfile || 'externo' }
+    ]
+  })
+    .sort({ updatedAt: -1 })
+    .lean();
 
-  if (!checklistsByType.default) {
-    checklistsByType.default = [];
-  }
+  const templates = templateDocs.map((doc) => normalizeTemplateDoc(doc));
 
   return (
     <EvaluationEntry
@@ -100,8 +107,9 @@ export default async function Page({ params }) {
       assignedEquipments={assignedEquipments}
       assignedToUser={assignedToUser}
       techProfile={session.techProfile || 'externo'}
-      checklistsByType={checklistsByType}
+      checklists={checklists}
       sessionRole={session.role}
+      templates={templates}
     />
   );
 }

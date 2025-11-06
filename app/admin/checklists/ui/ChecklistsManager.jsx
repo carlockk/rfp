@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import SlidingPanel from '@/app/ui/SlidingPanel';
 import ChecklistBuilder from './ChecklistBuilder';
@@ -9,6 +9,11 @@ const DEFAULT_OPTIONS = [
   { key: 'cumple', label: 'Cumple' },
   { key: 'no-cumple', label: 'No cumple' },
   { key: 'no-aplica', label: 'No aplica' }
+];
+
+const PROFILE_OPTIONS = [
+  { value: 'externo', label: 'Técnico externo' },
+  { value: 'candelaria', label: 'Técnico Candelaria' }
 ];
 
 const newId = (prefix = 'node') =>
@@ -56,11 +61,17 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [equipmentOptions, setEquipmentOptions] = useState([]);
+  const [loadingEquipment, setLoadingEquipment] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
     description: '',
     equipmentType: '',
+    equipmentTypesText: '',
+    equipmentIds: [],
+    allowedProfiles: ['externo', 'candelaria'],
+    mandatoryProfiles: [],
     tagsText: '',
     nodes: createDefaultNodes(),
     notes: '',
@@ -73,6 +84,10 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
       name: '',
       description: '',
       equipmentType: '',
+      equipmentTypesText: '',
+      equipmentIds: [],
+      allowedProfiles: ['externo', 'candelaria'],
+      mandatoryProfiles: [],
       tagsText: '',
       nodes: createDefaultNodes(),
       notes: '',
@@ -83,6 +98,81 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
     setError('');
     setMessage('');
     setEditingId('');
+  }, []);
+
+  const toggleAllowedProfile = useCallback((profile) => {
+    setForm((prev) => {
+      const allowed = new Set(prev.allowedProfiles || []);
+      if (allowed.has(profile)) {
+        allowed.delete(profile);
+      } else {
+        allowed.add(profile);
+      }
+      const allowedArray = Array.from(allowed);
+      const mandatory =
+        allowedArray.length === 0
+          ? prev.mandatoryProfiles || []
+          : (prev.mandatoryProfiles || []).filter((item) => allowedArray.includes(item));
+      return {
+        ...prev,
+        allowedProfiles: allowedArray,
+        mandatoryProfiles: mandatory
+      };
+    });
+  }, []);
+
+  const toggleMandatoryProfile = useCallback((profile) => {
+    setForm((prev) => {
+      const mandatory = new Set(prev.mandatoryProfiles || []);
+      const allowed = new Set(prev.allowedProfiles || []);
+      if (mandatory.has(profile)) {
+        mandatory.delete(profile);
+      } else {
+        mandatory.add(profile);
+        allowed.add(profile);
+      }
+      return {
+        ...prev,
+        allowedProfiles: Array.from(allowed),
+        mandatoryProfiles: Array.from(mandatory)
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchEquipments() {
+      setLoadingEquipment(true);
+      try {
+        const res = await fetch('/api/equipments');
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+        const payload = await res.json();
+        if (!active) return;
+        const options = Array.isArray(payload)
+          ? payload
+              .map((item) => ({
+                id: item._id?.toString?.() || item.id || '',
+                code: item.code || 'N/D',
+                type: item.type || ''
+              }))
+              .filter((item) => item.id)
+              .sort((a, b) => a.code.localeCompare(b.code))
+          : [];
+        setEquipmentOptions(options);
+      } catch (err) {
+        console.error('No se pudo cargar el catálogo de equipos', err);
+      } finally {
+        if (active) {
+          setLoadingEquipment(false);
+        }
+      }
+    }
+    fetchEquipments();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleNew = useCallback(() => {
@@ -105,6 +195,13 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
         name: data.name || '',
         description: data.description || '',
         equipmentType: data.equipmentType || '',
+        equipmentTypesText: Array.isArray(data.equipmentTypes) ? data.equipmentTypes.join(', ') : '',
+        equipmentIds: Array.isArray(data.equipmentIds) ? data.equipmentIds : [],
+        allowedProfiles:
+          Array.isArray(data.allowedProfiles) && data.allowedProfiles.length
+            ? data.allowedProfiles
+            : ['externo', 'candelaria'],
+        mandatoryProfiles: Array.isArray(data.mandatoryProfiles) ? data.mandatoryProfiles : [],
         tagsText: Array.isArray(data.tags) ? data.tags.join(', ') : '',
         nodes: data.structure && data.structure.length ? data.structure : createDefaultNodes(),
         notes: '',
@@ -153,10 +250,35 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
     setError('');
     setMessage('');
     try {
+      const primaryEquipmentType = form.equipmentType.trim();
+      const extraTypes = form.equipmentTypesText
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+      const equipmentTypesArray = Array.from(
+        new Set([
+          ...(primaryEquipmentType ? [primaryEquipmentType.toLowerCase()] : []),
+          ...extraTypes
+        ])
+      );
+      const equipmentIdsArray = Array.from(new Set(form.equipmentIds || []));
+      const allowedProfilesInitial = Array.from(new Set(form.allowedProfiles || []));
+      const mandatoryProfilesInitial = Array.from(new Set(form.mandatoryProfiles || []));
+      const allowedProfilesFinal = allowedProfilesInitial.length
+        ? Array.from(new Set([...allowedProfilesInitial, ...mandatoryProfilesInitial]))
+        : allowedProfilesInitial;
+      const mandatoryProfilesFinal = mandatoryProfilesInitial.filter((profile) =>
+        allowedProfilesFinal.length ? allowedProfilesFinal.includes(profile) : true
+      );
+
       const payload = {
         name: form.name,
         description: form.description,
-        equipmentType: form.equipmentType,
+        equipmentType: primaryEquipmentType,
+        equipmentTypes: equipmentTypesArray,
+        equipmentIds: equipmentIdsArray,
+        allowedProfiles: allowedProfilesFinal,
+        mandatoryProfiles: mandatoryProfilesFinal,
         tags: tagsArray,
         nodes: form.nodes,
         notes: form.notes,
@@ -181,6 +303,10 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
                     name: saved.name,
                     description: saved.description,
                     equipmentType: saved.equipmentType,
+                    equipmentTypes: saved.equipmentTypes || [],
+                    equipmentIds: saved.equipmentIds || [],
+                    allowedProfiles: saved.allowedProfiles || [],
+                    mandatoryProfiles: saved.mandatoryProfiles || [],
                     tags: saved.tags,
                     currentVersion: saved.currentVersion,
                     updatedAt: saved.updatedAt
@@ -194,6 +320,10 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
                 name: saved.name,
                 description: saved.description,
                 equipmentType: saved.equipmentType,
+                equipmentTypes: saved.equipmentTypes || [],
+                equipmentIds: saved.equipmentIds || [],
+                allowedProfiles: saved.allowedProfiles || [],
+                mandatoryProfiles: saved.mandatoryProfiles || [],
                 tags: saved.tags,
                 isActive: saved.isActive,
                 deletedAt: saved.deletedAt,
@@ -346,7 +476,7 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
               />
             </div>
             <div className="form-field">
-              <label className="label" htmlFor="equipmentType">Tipo de equipo</label>
+              <label className="label" htmlFor="equipmentType">Tipo de equipo principal</label>
               <input
                 id="equipmentType"
                 className="input"
@@ -355,6 +485,80 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
                 onChange={(event) => setForm((prev) => ({ ...prev, equipmentType: event.target.value }))}
                 required
               />
+            </div>
+            <div className="form-field">
+              <label className="label" htmlFor="equipmentTypesText">Tipos adicionales</label>
+              <input
+                id="equipmentTypesText"
+                className="input"
+                placeholder="Ej: excavadora, retroexcavadora"
+                value={form.equipmentTypesText}
+                onChange={(event) => setForm((prev) => ({ ...prev, equipmentTypesText: event.target.value }))}
+              />
+              <span className="input-hint">Separar por coma. Se agregan al tipo principal para determinar compatibilidad.</span>
+            </div>
+            <div className="form-field">
+              <label className="label" htmlFor="equipmentIds">Equipos específicos (opcional)</label>
+              <select
+                id="equipmentIds"
+                className="input"
+                multiple
+                value={form.equipmentIds}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    equipmentIds: Array.from(event.target.selectedOptions).map((option) => option.value)
+                  }))
+                }
+              >
+                {equipmentOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.code}{option.type ? ` · ${option.type}` : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="input-hint">
+                Si seleccionas equipos, el checklist solo aparecerá para ellos. Deja vacío para aplicar según el tipo.
+              </span>
+              {loadingEquipment ? (
+                <span className="input-hint">Cargando catálogo de equipos...</span>
+              ) : null}
+            </div>
+            <div className="form-field">
+              <label className="label">Perfiles habilitados</label>
+              <div className="input-stack">
+                {PROFILE_OPTIONS.map((option) => (
+                  <label key={option.value} className="input-choice">
+                    <input
+                      type="checkbox"
+                      checked={form.allowedProfiles.includes(option.value)}
+                      onChange={() => toggleAllowedProfile(option.value)}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              <span className="input-hint">
+                Si desmarcas todos, el checklist estará disponible para todos los perfiles.
+              </span>
+            </div>
+            <div className="form-field">
+              <label className="label">Perfiles con checklist obligatorio</label>
+              <div className="input-stack">
+                {PROFILE_OPTIONS.map((option) => (
+                  <label key={option.value} className="input-choice">
+                    <input
+                      type="checkbox"
+                      checked={form.mandatoryProfiles.includes(option.value)}
+                      onChange={() => toggleMandatoryProfile(option.value)}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              <span className="input-hint">
+                Si marcas un perfil como obligatorio, siempre deberá completar el checklist.
+              </span>
             </div>
             <div className="form-field">
               <label className="label" htmlFor="description">Descripción</label>

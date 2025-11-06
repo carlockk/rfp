@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "seed": "node --experimental-modules scripts/seed.mjs"
+    "seed": "node --experimental-modules scripts/seed.mjs",
+    "backfill:evaluations": "node scripts/backfill-evaluation-metrics.mjs"
   },
   "dependencies": {
     "bcryptjs": "2.4.3",

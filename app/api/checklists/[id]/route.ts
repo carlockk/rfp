@@ -12,6 +12,50 @@ type Params = {
   };
 };
 
+const PROFILE_KEYS = new Set(['externo', 'candelaria', 'todos']);
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+}
+
+function normalizeProfiles(value: unknown): string[] {
+  const profiles = normalizeStringArray(value).map((item) => item.toLowerCase());
+  if (!profiles.length) return [];
+  const set = new Set<string>();
+  profiles.forEach((profile) => {
+    if (!PROFILE_KEYS.has(profile)) return;
+    if (profile === 'todos') {
+      set.add('externo');
+      set.add('candelaria');
+    } else {
+      set.add(profile);
+    }
+  });
+  return Array.from(set);
+}
+
+function normalizeEquipmentTypes(value: unknown): string[] {
+  return normalizeStringArray(value).map((item) => item.toLowerCase());
+}
+
+function normalizeEquipmentIds(value: unknown): mongoose.Types.ObjectId[] {
+  if (!Array.isArray(value)) return [];
+  const ids: mongoose.Types.ObjectId[] = [];
+  const seen = new Set<string>();
+  value.forEach((raw) => {
+    if (typeof raw !== 'string') return;
+    if (!mongoose.isValidObjectId(raw)) return;
+    const key = raw.toString();
+    if (seen.has(key)) return;
+    seen.add(key);
+    ids.push(new mongoose.Types.ObjectId(raw));
+  });
+  return ids;
+}
+
 export async function GET(req: NextRequest, { params }: Params) {
   const id = params?.id || '';
   if (!mongoose.isValidObjectId(id)) {
@@ -100,6 +144,77 @@ export async function PUT(req: NextRequest, { params }: Params) {
       auditDetails.tags = normalizedTags;
       hasChanges = true;
     }
+  }
+
+  if (payload.equipmentTypes !== undefined) {
+    const normalizedEquipmentTypes = normalizeEquipmentTypes(payload.equipmentTypes);
+    const existingEquipmentTypes = Array.isArray(checklist.equipmentTypes)
+      ? checklist.equipmentTypes
+      : [];
+    if (JSON.stringify(normalizedEquipmentTypes) !== JSON.stringify(existingEquipmentTypes)) {
+      checklist.equipmentTypes = normalizedEquipmentTypes;
+      auditDetails.equipmentTypes = normalizedEquipmentTypes;
+      hasChanges = true;
+    }
+  }
+
+  if (payload.equipmentIds !== undefined) {
+    const normalizedEquipmentIds = normalizeEquipmentIds(payload.equipmentIds);
+    const existingIds = Array.isArray(checklist.equipmentIds)
+      ? checklist.equipmentIds.map((id) => id.toString())
+      : [];
+    const nextIds = normalizedEquipmentIds.map((id) => id.toString());
+    if (JSON.stringify(existingIds) !== JSON.stringify(nextIds)) {
+      checklist.equipmentIds = normalizedEquipmentIds;
+      auditDetails.equipmentIds = nextIds;
+      hasChanges = true;
+    }
+  }
+
+  let nextAllowedProfiles = Array.isArray(checklist.allowedProfiles) ? checklist.allowedProfiles : [];
+  let nextMandatoryProfiles = Array.isArray(checklist.mandatoryProfiles) ? checklist.mandatoryProfiles : [];
+  let profilesChanged = false;
+
+  if (payload.allowedProfiles !== undefined) {
+    nextAllowedProfiles = normalizeProfiles(payload.allowedProfiles);
+    profilesChanged = true;
+  }
+
+  if (payload.mandatoryProfiles !== undefined) {
+    nextMandatoryProfiles = normalizeProfiles(payload.mandatoryProfiles);
+    profilesChanged = true;
+  }
+
+  if (profilesChanged) {
+    const allowedSet = new Set(nextAllowedProfiles);
+    nextMandatoryProfiles.forEach((profile) => allowedSet.add(profile));
+    const updatedAllowed = Array.from(allowedSet);
+    if (JSON.stringify(updatedAllowed) !== JSON.stringify(checklist.allowedProfiles || [])) {
+      checklist.allowedProfiles = updatedAllowed;
+      auditDetails.allowedProfiles = updatedAllowed;
+      hasChanges = true;
+    }
+    if (JSON.stringify(nextMandatoryProfiles) !== JSON.stringify(checklist.mandatoryProfiles || [])) {
+      checklist.mandatoryProfiles = nextMandatoryProfiles;
+      auditDetails.mandatoryProfiles = nextMandatoryProfiles;
+      hasChanges = true;
+    }
+  }
+
+  if (typeof payload.equipmentType === 'string' && payload.equipmentType.trim() !== checklist.equipmentType) {
+    checklist.equipmentType = payload.equipmentType.trim();
+    auditDetails.equipmentType = checklist.equipmentType;
+    hasChanges = true;
+  } else if (
+    payload.equipmentType === undefined &&
+    payload.equipmentTypes !== undefined &&
+    checklist.equipmentType === '' &&
+    Array.isArray(checklist.equipmentTypes) &&
+    checklist.equipmentTypes.length
+  ) {
+    checklist.equipmentType = checklist.equipmentTypes[0];
+    auditDetails.equipmentType = checklist.equipmentType;
+    hasChanges = true;
   }
 
   if (Array.isArray(payload.nodes) && payload.nodes.length) {

@@ -4,6 +4,7 @@ import { dbConnect } from '@/lib/db';
 import Evaluation from '@/models/Evaluation';
 import Checklist from '@/models/Checklist';
 import Equipment from '@/models/Equipment';
+import EvaluationTemplate from '@/models/EvaluationTemplate';
 import Notification from '@/models/Notification';
 import PushSubscription from '@/models/PushSubscription';
 import User from '@/models/User';
@@ -11,8 +12,42 @@ import { broadcastPush, isPushAvailable } from '@/lib/push';
 import { getSession } from '@/lib/auth';
 import { requirePermission } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
+import {
+  TEMPLATE_METRIC_FIELD_MAP,
+  TemplateMetricKey,
+  TemplateNumericMetrics,
+  isTemplateMetricKey
+} from '@/lib/templateMetrics';
 
 const VALID_STATUS = new Set(['ok', 'observado', 'critico']);
+const MAX_TEMPLATE_ATTACHMENT_SIZE = 1024 * 1024 * 3;
+
+type TemplateAttachmentPayload = {
+  name?: string;
+  size?: number;
+  type?: string;
+  dataUrl?: string;
+  url?: string;
+};
+
+type TemplateFieldInput = {
+  key?: string;
+  type?: string;
+  metadata?: {
+    metricKey?: string;
+  };
+  children?: TemplateFieldInput[];
+};
+
+type TemplatePayload = {
+  id?: string;
+  name?: string;
+  isChecklistMandatory?: boolean;
+  maxAttachments?: number;
+  fields?: TemplateFieldInput[];
+  values?: Record<string, unknown>;
+  attachments?: TemplateAttachmentPayload[];
+};
 
 type EvaluationPayload = {
   checklistId?: string;
@@ -30,6 +65,8 @@ type EvaluationPayload = {
     value?: unknown;
     note?: string;
   }>;
+  template?: TemplatePayload;
+  skipChecklist?: boolean;
 };
 
 const sanitizeResponses = (responses: EvaluationPayload['responses']) =>
@@ -42,6 +79,113 @@ const sanitizeResponses = (responses: EvaluationPayload['responses']) =>
         }))
         .filter((item) => item.itemKey)
     : [];
+
+function flattenTemplateFields(fields: TemplateFieldInput[] = []): TemplateFieldInput[] {
+  const result: TemplateFieldInput[] = [];
+  fields.forEach((field) => {
+    if (!field || typeof field !== 'object') return;
+    result.push(field);
+    if (Array.isArray(field.children) && field.children.length) {
+      result.push(...flattenTemplateFields(field.children));
+    }
+  });
+  return result;
+}
+
+function sanitizeTemplateValues(
+  fields: TemplateFieldInput[] = [],
+  values: TemplatePayload['values']
+): Record<string, unknown> {
+  if (!values || typeof values !== 'object') return {};
+  const allowed = new Set(
+    flattenTemplateFields(fields)
+      .map((field) => (typeof field?.key === 'string' ? field.key : ''))
+      .filter(Boolean)
+  );
+
+  return Object.entries(values).reduce<Record<string, unknown>>((acc, [key, value]) => {
+    if (allowed.has(key)) {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+}
+
+function parseNumericValue(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return raw;
+  }
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function extractTemplateMetrics(
+  fields: TemplateFieldInput[] = [],
+  values: Record<string, unknown> = {}
+): TemplateNumericMetrics {
+  const result: TemplateNumericMetrics = {};
+  const flattened = flattenTemplateFields(fields);
+
+  flattened.forEach((field) => {
+    const key = typeof field?.key === 'string' ? field.key : '';
+    if (!key) return;
+    const metricKey = field?.metadata?.metricKey;
+    if (metricKey && isTemplateMetricKey(metricKey)) {
+      const value = parseNumericValue(values[key]);
+      if (value !== null) {
+        const targetField = TEMPLATE_METRIC_FIELD_MAP[metricKey as TemplateMetricKey];
+        if (targetField) {
+          result[targetField] = value;
+        }
+      }
+    }
+  });
+
+  return result;
+}
+
+function sanitizeTemplateAttachments(
+  attachments: TemplatePayload['attachments'],
+  maxAllowed: number
+) {
+  if (!Array.isArray(attachments) || !attachments.length || maxAllowed <= 0) return [];
+  const sanitized: Array<{
+    name: string;
+    size: number;
+    type: string;
+    url?: string;
+    dataUrl?: string;
+  }> = [];
+
+  attachments.forEach((item) => {
+    if (!item || sanitized.length >= maxAllowed) return;
+    const { name, size, type } = item;
+    const url = typeof item?.url === 'string' ? item.url.trim() : '';
+    const dataUrl = typeof item?.dataUrl === 'string' ? item.dataUrl : '';
+
+    if (
+      typeof name === 'string' &&
+      typeof type === 'string' &&
+      typeof size === 'number' &&
+      size > 0 &&
+      size <= MAX_TEMPLATE_ATTACHMENT_SIZE
+    ) {
+      if (url) {
+        sanitized.push({ name, size, type, url });
+      } else if (dataUrl && dataUrl.startsWith('data:')) {
+        sanitized.push({ name, size, type, dataUrl });
+      }
+    }
+  });
+
+  return sanitized;
+}
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -60,29 +204,64 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Payload invalido' }, { status: 400 });
   }
 
-  const { checklistId, equipmentId } = payload || {};
-
-  if (!checklistId || !mongoose.isValidObjectId(checklistId)) {
-    return NextResponse.json({ error: 'checklistId invalido' }, { status: 400 });
-  }
-
+  const equipmentId = typeof payload?.equipmentId === 'string' ? payload.equipmentId : '';
   if (!equipmentId || !mongoose.isValidObjectId(equipmentId)) {
     return NextResponse.json({ error: 'equipmentId invalido' }, { status: 400 });
   }
 
+  const rawChecklistId = typeof payload.checklistId === 'string' ? payload.checklistId : '';
+  const hasChecklistId = rawChecklistId && mongoose.isValidObjectId(rawChecklistId);
+
   await dbConnect();
 
+  const templatePayload = payload.template || {};
+  const templateIdRaw = typeof templatePayload.id === 'string' ? templatePayload.id : '';
+  let templateDoc: Record<string, any> | null = null;
+
+  if (templateIdRaw) {
+    if (!mongoose.isValidObjectId(templateIdRaw)) {
+      return NextResponse.json({ error: 'templateId invalido' }, { status: 400 });
+    }
+    templateDoc = await EvaluationTemplate.findById(templateIdRaw).lean<Record<string, any>>();
+  }
+
+  const templateFields = Array.isArray(templateDoc?.fields)
+    ? templateDoc.fields
+    : Array.isArray(templatePayload.fields)
+      ? templatePayload.fields
+      : [];
+
+  const templateValues = sanitizeTemplateValues(templateFields, templatePayload.values);
+  const templateName =
+    typeof (templateDoc?.name ?? templatePayload?.name) === 'string'
+      ? String(templateDoc?.name ?? templatePayload?.name).trim()
+      : '';
+
+  const templateAllowsSkip =
+    templateDoc != null
+      ? templateDoc.isChecklistMandatory === false
+      : templatePayload.isChecklistMandatory === false;
+
+  const requestedSkip = Boolean(payload.skipChecklist);
+  const skipChecklist = templateAllowsSkip && requestedSkip && !hasChecklistId;
+
+  const checklistId = skipChecklist ? '' : hasChecklistId ? rawChecklistId : '';
+
+  if (!skipChecklist && !checklistId) {
+    return NextResponse.json({ error: 'checklistId invalido' }, { status: 400 });
+  }
+
   const [checklist, equipment] = await Promise.all([
-    Checklist.findById(checklistId).lean<Record<string, any>>(),
+    checklistId ? Checklist.findById(checklistId).lean<Record<string, any>>() : Promise.resolve(null),
     Equipment.findById(equipmentId).lean<Record<string, any>>()
   ]);
 
-  if (!checklist) {
-    return NextResponse.json({ error: 'Checklist no encontrado' }, { status: 404 });
-  }
-
   if (!equipment) {
     return NextResponse.json({ error: 'Equipo no encontrado' }, { status: 404 });
+  }
+
+  if (!skipChecklist && !checklist) {
+    return NextResponse.json({ error: 'Checklist no encontrado' }, { status: 404 });
   }
 
   if (session.role === 'tecnico') {
@@ -93,7 +272,7 @@ export async function POST(req: NextRequest) {
   }
 
   const responses = sanitizeResponses(payload.responses);
-  if (responses.length === 0) {
+  if (!skipChecklist && responses.length === 0) {
     return NextResponse.json({ error: 'Se requieren respuestas' }, { status: 400 });
   }
 
@@ -116,48 +295,106 @@ export async function POST(req: NextRequest) {
   const completedAt = finishedAt;
 
   const durationSeconds =
-    typeof payload.durationSeconds === 'number' && Number.isFinite(payload.durationSeconds) && payload.durationSeconds >= 0
+    typeof payload.durationSeconds === 'number' &&
+    Number.isFinite(payload.durationSeconds) &&
+    payload.durationSeconds >= 0
       ? Math.round(payload.durationSeconds)
       : Math.max(0, Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000));
 
   const formData = payload.formData && typeof payload.formData === 'object' ? payload.formData : {};
 
-  const checklistVersion =
-    typeof payload.checklistVersion === 'number' && payload.checklistVersion > 0
+  const checklistVersion = skipChecklist
+    ? 0
+    : typeof payload.checklistVersion === 'number' && payload.checklistVersion > 0
       ? payload.checklistVersion
-      : Number(checklist.version || 1);
+      : Number(checklist?.version || 1);
 
-  if (Number.isNaN(completedAt.getTime())) {
-    return NextResponse.json({ error: 'Fecha invalida' }, { status: 400 });
+  const resolvedMaxAttachments =
+    templateDoc != null
+      ? Math.max(0, templateDoc.maxAttachments ?? 0)
+      : typeof templatePayload.maxAttachments === 'number' && templatePayload.maxAttachments > 0
+        ? Math.min(Math.floor(templatePayload.maxAttachments), 10)
+        : 0;
+
+  const attachmentsEnabled =
+    templateDoc != null ? templateDoc.attachmentsEnabled !== false : resolvedMaxAttachments > 0;
+
+  const effectiveMaxAttachments = attachmentsEnabled ? resolvedMaxAttachments || 3 : 0;
+
+  const templateAttachments = attachmentsEnabled
+    ? sanitizeTemplateAttachments(templatePayload.attachments, effectiveMaxAttachments)
+    : [];
+
+  if (!attachmentsEnabled && Array.isArray(templatePayload.attachments) && templatePayload.attachments.length) {
+    return NextResponse.json({ error: 'La plantilla no permite adjuntos' }, { status: 400 });
   }
 
-  const evaluation = await Evaluation.create({
-    checklist: checklist._id,
+  const templateMetrics = extractTemplateMetrics(templateFields, templateValues);
+
+  let previousEvaluation: { hourmeterCurrent?: number | null; odometerCurrent?: number | null } | null = null;
+  if (templateMetrics.hourmeterCurrent != null || templateMetrics.odometerCurrent != null) {
+    previousEvaluation = await Evaluation.findOne({ equipment: equipment._id })
+      .sort({ completedAt: -1 })
+      .select('hourmeterCurrent odometerCurrent completedAt')
+      .lean();
+  }
+
+  const templateRef =
+    templateDoc?._id ?? (templateIdRaw && mongoose.isValidObjectId(templateIdRaw) ? templateIdRaw : undefined);
+
+  const evaluationData: Record<string, any> = {
+    checklist: skipChecklist ? null : checklist?._id || checklistId || null,
     equipment: equipment._id,
     technician: session.id,
     status,
-    observations,
     responses,
+    observations,
     startedAt,
     finishedAt,
     durationSeconds,
     formData,
     checklistVersion,
-    completedAt
+    completedAt,
+    templateId: templateRef ?? null,
+    templateName,
+    templateValues,
+    templateFields,
+    templateAttachments,
+    skipChecklist
+  };
+
+  Object.entries(templateMetrics).forEach(([field, value]) => {
+    if (value != null) {
+      evaluationData[field] = value;
+    }
   });
+
+  if (templateMetrics.hourmeterCurrent != null && previousEvaluation?.hourmeterCurrent != null) {
+    const delta = templateMetrics.hourmeterCurrent - previousEvaluation.hourmeterCurrent;
+    if (Number.isFinite(delta) && delta >= 0) {
+      evaluationData.hourmeterPrevious = previousEvaluation.hourmeterCurrent;
+      evaluationData.hourmeterDelta = delta;
+    }
+  }
+
+  if (templateMetrics.odometerCurrent != null && previousEvaluation?.odometerCurrent != null) {
+    const delta = templateMetrics.odometerCurrent - previousEvaluation.odometerCurrent;
+    if (Number.isFinite(delta) && delta >= 0) {
+      evaluationData.odometerPrevious = previousEvaluation.odometerCurrent;
+      evaluationData.odometerDelta = delta;
+    }
+  }
+
+  const evaluation = await Evaluation.create(evaluationData);
+
+  const contextName = checklist?.name || templateName || 'Formulario tecnico';
 
   if (status === 'critico') {
     const notification = await Notification.create({
-      message: `Falla critica detectada en ${equipment.code} (${checklist.name}).`,
-      type: 'alert',
-      level: 'high',
-      audience: 'admin',
-      metadata: {
-        evaluationId: evaluation._id.toString(),
-        checklistId: checklist._id.toString(),
-        equipmentId: equipment._id.toString(),
-        technicianId: session.id
-      }
+      message: `Falla critica detectada en ${equipment.code}${contextName ? ` (${contextName})` : ''}.`,
+      level: 'critical',
+      equipment: equipment._id,
+      checklist: checklist?._id || null
     });
 
     if (isPushAvailable()) {
@@ -174,7 +411,7 @@ export async function POST(req: NextRequest) {
         if (subscriptions.length) {
           await broadcastPush(subscriptions, {
             title: 'Alerta critica detectada',
-            body: `${equipment.code} - ${checklist.name}` ,
+            body: `${equipment.code}${contextName ? ` - ${contextName}` : ''}`,
             badge: '/log.png',
             icon: '/log.png',
             tag: 'critical-evaluation',
@@ -196,18 +433,25 @@ export async function POST(req: NextRequest) {
     userId: typeof session.id === 'string' ? session.id : undefined,
     action: 'evaluation.create',
     module: 'evaluations',
-    subject: checklist.name || 'Checklist',
+    subject: contextName || 'Checklist',
     subjectId: evaluation._id,
     details: {
       evaluationId: evaluation._id.toString(),
-      checklistId: checklist._id.toString(),
+      checklistId: checklist?._id?.toString() || null,
       equipmentId: equipment._id.toString(),
       status,
       responseCount: responses.length,
       startedAt,
       finishedAt,
       durationSeconds,
-      checklistVersion
+      checklistVersion,
+      templateId: templateRef ? String(templateRef) : null,
+      templateName,
+      skipChecklist,
+      hourmeterCurrent: evaluationData.hourmeterCurrent ?? null,
+      odometerCurrent: evaluationData.odometerCurrent ?? null,
+      fuelAddedLiters: evaluationData.fuelAddedLiters ?? null,
+      energyAddedKwh: evaluationData.energyAddedKwh ?? null
     }
   });
 
@@ -284,6 +528,3 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(evaluations);
 }
-
-
-

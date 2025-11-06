@@ -37,6 +37,10 @@ const ChecklistSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   description: { type: String, default: '' },
   equipmentType: { type: String, default: '', trim: true },
+  equipmentTypes: { type: [String], default: [] },
+  equipmentIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Equipment', default: [] },
+  allowedProfiles: { type: [String], default: [] },
+  mandatoryProfiles: { type: [String], default: [] },
   tags: { type: [String], default: [] },
   currentVersion: { type: Number, default: 1 },
   versions: { type: [ChecklistVersionSchema], default: [] },
@@ -45,6 +49,8 @@ const ChecklistSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 ChecklistSchema.index({ name: 1, equipmentType: 1 });
+ChecklistSchema.index({ equipmentTypes: 1 });
+ChecklistSchema.index({ equipmentIds: 1 });
 ChecklistSchema.index({ currentVersion: -1 });
 
 export default mongoose.models.Checklist || mongoose.model('Checklist', ChecklistSchema);

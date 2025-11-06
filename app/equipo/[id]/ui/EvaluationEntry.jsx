@@ -5,10 +5,35 @@ import BackButton from '../../../ui/BackButton';
 import SlidingPanel from '../../../ui/SlidingPanel';
 import EvaluationForm from './EvaluationForm';
 
-const DEFAULT_KEY = 'default';
+function normalizeProfile(value) {
+  const key = (value || '').toLowerCase();
+  if (key === 'candelaria' || key === 'externo') return key;
+  return 'externo';
+}
 
-function typeKey(value) {
-  return (value || '').toLowerCase() || DEFAULT_KEY;
+function normalizeEquipmentAssignments(checklist) {
+  const equipmentType = (checklist.equipmentType || '').toLowerCase();
+  const equipmentTypes = Array.isArray(checklist.equipmentTypes)
+    ? checklist.equipmentTypes.map((item) => (typeof item === 'string' ? item.toLowerCase() : '')).filter(Boolean)
+    : [];
+  const equipmentIds = Array.isArray(checklist.equipmentIds)
+    ? checklist.equipmentIds.map((item) => (item ? item.toString() : '')).filter(Boolean)
+    : [];
+  const allowedProfiles = Array.isArray(checklist.allowedProfiles) && checklist.allowedProfiles.length
+    ? checklist.allowedProfiles.map((item) => item.toLowerCase())
+    : ['externo', 'candelaria'];
+  const mandatoryProfiles = Array.isArray(checklist.mandatoryProfiles)
+    ? checklist.mandatoryProfiles.map((item) => item.toLowerCase())
+    : [];
+
+  return {
+    ...checklist,
+    equipmentType,
+    equipmentTypes,
+    equipmentIds,
+    allowedProfiles,
+    mandatoryProfiles
+  };
 }
 
 export default function EvaluationEntry({
@@ -16,8 +41,9 @@ export default function EvaluationEntry({
   assignedEquipments,
   assignedToUser,
   techProfile,
-  checklistsByType,
-  sessionRole
+  checklists = [],
+  sessionRole,
+  templates = []
 }) {
   const variant = techProfile === 'candelaria' ? 'candelaria' : 'externo';
 
@@ -73,10 +99,42 @@ export default function EvaluationEntry({
         ? assignedToUser
         : true;
 
-  const checklists =
-    targetEquipment
-      ? (checklistsByType[typeKey(targetEquipment.type)] || checklistsByType[DEFAULT_KEY] || [])
-      : [];
+  const profileKey = normalizeProfile(techProfile);
+
+  const filteredChecklists = useMemo(() => {
+    if (!targetEquipment) return [];
+    const equipmentId = targetEquipment.id;
+    const equipmentType = (targetEquipment.type || '').toLowerCase();
+
+    return checklists
+      .map(normalizeEquipmentAssignments)
+      .filter((checklist) => {
+        if (checklist.isActive === false) return false;
+
+        const matchesEquipmentId = checklist.equipmentIds.length
+          ? checklist.equipmentIds.includes(equipmentId)
+          : false;
+        const possibleTypes = checklist.equipmentTypes.length
+          ? checklist.equipmentTypes
+          : checklist.equipmentType
+            ? [checklist.equipmentType]
+            : [];
+        const matchesType = possibleTypes.length
+          ? possibleTypes.includes(equipmentType)
+          : true;
+        const matchesEquipment = checklist.equipmentIds.length ? matchesEquipmentId : matchesType;
+
+        const profileAllowed = checklist.allowedProfiles.includes(profileKey);
+        return matchesEquipment && profileAllowed;
+      })
+      .map((checklist) => ({
+        ...checklist,
+        isMandatory: checklist.mandatoryProfiles.includes(profileKey)
+      }));
+  }, [checklists, profileKey, targetEquipment]);
+
+  const hasMandatoryChecklist = filteredChecklists.some((item) => item.isMandatory);
+  const allowChecklistSkip = filteredChecklists.length === 0 || !hasMandatoryChecklist;
 
   const canEvaluate = sessionRole === 'tecnico';
 
@@ -95,7 +153,7 @@ export default function EvaluationEntry({
             {displayEquipment.brand} {displayEquipment.model}{displayEquipment.plate ? ` - ${displayEquipment.plate}` : ''}
           </div>
           <div className="label" style={{ marginTop: 4 }}>
-            Perfil tecnico: {variant === 'candelaria' ? 'Tecnico Candelaria' : 'Tecnico externo'}
+            Perfil técnico: {variant === 'candelaria' ? 'Técnico Candelaria' : 'Técnico externo'}
           </div>
         </div>
         <BackButton fallback="/" />
@@ -105,7 +163,7 @@ export default function EvaluationEntry({
         <p className="label">Detalle del equipo escaneado</p>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
           <li>Combustible: {displayEquipment.fuel || 'N/D'}{displayEquipment.adblue ? ' + AdBlue' : ''}</li>
-          <li>Asignado a ti: {isAssignedDisplay ? 'Si' : 'No'}</li>
+          <li>Asignado a ti: {isAssignedDisplay ? 'Sí' : 'No'}</li>
         </ul>
       </div>
 
@@ -113,11 +171,11 @@ export default function EvaluationEntry({
         <div style={{ marginBottom: 16 }}>
           {displayEquipment.id === equipment.id && !assignedToUser ? (
             <div className="alert" style={{ background: 'rgba(240, 68, 56, 0.1)', padding: 12, borderRadius: 8, color: '#c62828', marginBottom: 12 }}>
-              Esta maquina o equipo no esta asociada a tu usuario.
+              Esta máquina o equipo no está asociada a tu usuario.
             </div>
           ) : null}
           <button className="btn" onClick={() => setPanelOpen(true)}>
-            No puedo escanear la maquina
+            No puedo escanear la máquina
           </button>
         </div>
       ) : null}
@@ -128,25 +186,22 @@ export default function EvaluationEntry({
 
       {canEvaluate ? (
         targetEquipment ? (
-          checklists.length > 0 ? (
-            <EvaluationForm
-              equipment={targetEquipment}
-              checklists={checklists}
-              variant={variant}
-              onSubmitted={() => setFeedback('Evaluacion enviada. Si estabas sin conexion se sincronizara automaticamente.')}
-            />
-          ) : (
-            <div style={{ color: 'var(--muted)' }}>
-              No hay checklist disponibles para este tipo de equipo. Contacta al administrador.
-            </div>
-          )
+          <EvaluationForm
+            equipment={targetEquipment}
+            checklists={filteredChecklists}
+            variant={variant}
+            templates={templates}
+            techProfile={techProfile}
+            checklistSkipAllowed={allowChecklistSkip}
+            onSubmitted={() => setFeedback('Evaluación enviada. Si estabas sin conexión se sincronizará automáticamente.')}
+          />
         ) : technicianEquipments.length ? (
           <div style={{ color: 'var(--muted)' }}>
-            Selecciona uno de tus equipos asignados para continuar con la evaluacion.
+            Selecciona uno de tus equipos asignados para continuar con la evaluación.
           </div>
         ) : (
           <div style={{ color: 'var(--muted)' }}>
-            No tienes equipos asignados actualmente. Solicita una asignacion al administrador.
+            No tienes equipos asignados actualmente. Solicita una asignación al administrador.
           </div>
         )
       ) : (

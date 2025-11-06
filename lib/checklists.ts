@@ -172,11 +172,40 @@ export function serializeChecklist(record: any, includeStructure: boolean, versi
     versionsArray.find((v: any) => v.version === targetVersion) ||
     (targetVersion ? fallbackVersion : null);
 
+  const equipmentTypes = Array.isArray(safe.equipmentTypes)
+    ? safe.equipmentTypes
+        .map((item: unknown) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+    : [];
+
+  const equipmentIds = Array.isArray(safe.equipmentIds)
+    ? safe.equipmentIds
+        .map((item: any) => {
+          if (!item) return null;
+          if (typeof item === 'string') return item;
+          if (item?._id) return item._id.toString?.();
+          return item.toString?.();
+        })
+        .filter(Boolean)
+    : [];
+
+  const allowedProfiles = Array.isArray(safe.allowedProfiles)
+    ? safe.allowedProfiles.filter((item: unknown) => typeof item === 'string' && item.trim())
+    : [];
+
+  const mandatoryProfiles = Array.isArray(safe.mandatoryProfiles)
+    ? safe.mandatoryProfiles.filter((item: unknown) => typeof item === 'string' && item.trim())
+    : [];
+
   return {
     id: safe._id?.toString?.() || '',
     name: safe.name,
     description: safe.description,
     equipmentType: safe.equipmentType,
+    equipmentTypes,
+    equipmentIds,
+    allowedProfiles,
+    mandatoryProfiles,
     tags: safe.tags || [],
     isActive: safe.isActive !== false,
     deletedAt: safe.deletedAt || null,

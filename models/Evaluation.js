@@ -7,7 +7,7 @@ const EvaluationResponseSchema = new mongoose.Schema({
 }, { _id: false });
 
 const EvaluationSchema = new mongoose.Schema({
-  checklist: { type: mongoose.Schema.Types.ObjectId, ref: 'Checklist', required: true },
+  checklist: { type: mongoose.Schema.Types.ObjectId, ref: 'Checklist', default: null },
   equipment: { type: mongoose.Schema.Types.ObjectId, ref: 'Equipment', required: true },
   technician: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, enum: ['ok', 'observado', 'critico'], default: 'ok' },
@@ -18,10 +18,42 @@ const EvaluationSchema = new mongoose.Schema({
   durationSeconds: { type: Number, default: 0 },
   formData: { type: mongoose.Schema.Types.Mixed },
   checklistVersion: { type: Number, default: 1 },
-  completedAt: { type: Date, default: Date.now }
+  completedAt: { type: Date, default: Date.now },
+  templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'EvaluationTemplate', default: null },
+  templateName: { type: String, default: '' },
+  templateValues: { type: mongoose.Schema.Types.Mixed },
+  templateFields: { type: mongoose.Schema.Types.Mixed },
+  templateAttachments: {
+    type: [
+      {
+        name: { type: String, required: true },
+        size: { type: Number, required: true },
+        type: { type: String, required: true },
+        url: { type: String, default: '' },
+        dataUrl: { type: String, default: '' }
+      }
+    ],
+    default: []
+  },
+  skipChecklist: { type: Boolean, default: false },
+  hourmeterCurrent: { type: Number, default: null },
+  hourmeterPrevious: { type: Number, default: null },
+  hourmeterDelta: { type: Number, default: null },
+  odometerCurrent: { type: Number, default: null },
+  odometerPrevious: { type: Number, default: null },
+  odometerDelta: { type: Number, default: null },
+  fuelLevelBefore: { type: Number, default: null },
+  fuelLevelAfter: { type: Number, default: null },
+  fuelAddedLiters: { type: Number, default: null },
+  energyAddedKwh: { type: Number, default: null },
+  adblueAddedLiters: { type: Number, default: null },
+  batteryLevelBefore: { type: Number, default: null },
+  batteryLevelAfter: { type: Number, default: null }
 }, { timestamps: true });
 
 EvaluationSchema.index({ completedAt: -1 });
 EvaluationSchema.index({ equipment: 1, technician: 1, completedAt: -1 });
+EvaluationSchema.index({ equipment: 1, completedAt: -1 });
+EvaluationSchema.index({ templateId: 1, completedAt: -1 });
 
 export default mongoose.models.Evaluation || mongoose.model('Evaluation', EvaluationSchema);

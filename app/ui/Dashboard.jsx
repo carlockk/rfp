@@ -45,7 +45,8 @@ function AdminDashboard({ metrics }) {
     criticalLast30,
     monthlyStats,
     recentCriticals,
-    notifications
+    notifications,
+    consumption30d
   } = metrics;
 
   return (
@@ -67,7 +68,7 @@ function AdminDashboard({ metrics }) {
         <div className="col">
           <div className="card kpi-card">
             <div className="kpi">{activeTechnicians}</div>
-            <div className="label">Técnicos activos</div>
+            <div className="label">técnicos activos</div>
           </div>
         </div>
         <div className="col">
@@ -85,36 +86,90 @@ function AdminDashboard({ metrics }) {
       </div>
 
       <div className="row" style={{ marginBottom: 24 }}>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{consumption30d.fuel.toFixed(1)}</div>
+            <div className="label">Combustible (L) 30 días</div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{consumption30d.energy.toFixed(1)}</div>
+            <div className="label">Energía (kWh) 30 días</div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{consumption30d.adblue.toFixed(1)}</div>
+            <div className="label">AdBlue (L) 30 días</div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{consumption30d.kilometers.toFixed(1)}</div>
+            <div className="label">Kilómetros 30 días</div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card kpi-card">
+            <div className="kpi">{consumption30d.hours.toFixed(1)}</div>
+            <div className="label">Horas operadas 30 días</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row" style={{ marginBottom: 24 }}>
         <div className="col" style={{ flexBasis: '60%' }}>
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Reportes por mes</h3>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <h3 style={{ marginTop: 0 }}>Tendencia mensual</h3>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
               {monthlyStats.map((item) => (
-                <div key={item.month} style={{ minWidth: 120 }}>
-                  <div style={{ height: 150, display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-                    {STATUS_KEYS.map((status) => {
-                      const value = item[status];
-                      const percentage = item.total ? Math.round((value / item.total) * 100) : 0;
-                      return (
-                        <div
-                          key={status}
-                          title={`${STATUS_LABELS[status]}: ${value}`}
-                          style={{
-                            width: 18,
-                            height: `${percentage || (value ? 10 : 2)}%`,
-                            background: STATUS_COLORS[status],
-                            borderRadius: 4,
-                            minHeight: value ? 8 : 2
-                          }}
-                        />
-                      );
-                    })}
+                <div key={item.month} className="kpi-card" style={{ background: 'var(--surface)', padding: 16 }}>
+                  <p className="label" style={{ margin: 0 }}>{item.month}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, marginBottom: 12 }}>
+                    <div>
+                      <span className="label">Total</span>
+                      <div style={{ fontSize: 20, fontWeight: 700 }}>{item.total}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {STATUS_KEYS.map((status) => (
+                        <span key={status} className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              background: STATUS_COLORS[status],
+                              display: 'inline-block'
+                            }}
+                          />
+                          {item[status]}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <p className="label" style={{ marginTop: 8, textAlign: 'center' }}>
-                    {item.month}
-                    <br />
-                    <strong>{item.total}</strong> reportes
-                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                    <div className="label">
+                      Horas<br />
+                      <strong>{item.hourmeterDelta.toFixed(1)}</strong>
+                    </div>
+                    <div className="label">
+                      Km<br />
+                      <strong>{item.odometerDelta.toFixed(1)}</strong>
+                    </div>
+                    <div className="label">
+                      Combustible (L)<br />
+                      <strong>{item.fuelAddedLiters.toFixed(1)}</strong>
+                    </div>
+                    <div className="label">
+                      Energía (kWh)<br />
+                      <strong>{item.energyAddedKwh.toFixed(1)}</strong>
+                    </div>
+                    <div className="label">
+                      AdBlue (L)<br />
+                      <strong>{item.adblueAddedLiters.toFixed(1)}</strong>
+                    </div>
+                  </div>
                 </div>
               ))}
               {!monthlyStats.length ? (
@@ -160,7 +215,7 @@ function AdminDashboard({ metrics }) {
                 <th>Fecha</th>
                 <th>Checklist</th>
                 <th>Equipo</th>
-                <th>Técnico</th>
+                <th>técnico</th>
                 <th>Duración</th>
                 <th>Observaciones</th>
               </tr>
@@ -449,6 +504,8 @@ export default async function Dashboard() {
   since.setDate(1);
   since.setHours(0, 0, 0, 0);
 
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
   const [
     totalEquipos,
     activeTechnicians,
@@ -457,14 +514,15 @@ export default async function Dashboard() {
     monthlyStatsRaw,
     recentCriticals,
     notificationsRaw,
-    computedAlerts
+    computedAlerts,
+    consumptionLast30
   ] = await Promise.all([
     Equipment.countDocuments({ isActive: true }),
     User.countDocuments({ role: 'tecnico' }),
     Evaluation.countDocuments(),
     Evaluation.countDocuments({
       status: 'critico',
-      completedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      completedAt: { $gte: thirtyDaysAgo }
     }),
     Evaluation.aggregate([
       { $match: { completedAt: { $gte: since } } },
@@ -474,7 +532,12 @@ export default async function Dashboard() {
           total: { $sum: 1 },
           ok: { $sum: { $cond: [{ $eq: ['$status', 'ok'] }, 1, 0] } },
           observado: { $sum: { $cond: [{ $eq: ['$status', 'observado'] }, 1, 0] } },
-          critico: { $sum: { $cond: [{ $eq: ['$status', 'critico'] }, 1, 0] } }
+          critico: { $sum: { $cond: [{ $eq: ['$status', 'critico'] }, 1, 0] } },
+          hourmeterDelta: { $sum: { $ifNull: ['$hourmeterDelta', 0] } },
+          odometerDelta: { $sum: { $ifNull: ['$odometerDelta', 0] } },
+          fuelAddedLiters: { $sum: { $ifNull: ['$fuelAddedLiters', 0] } },
+          energyAddedKwh: { $sum: { $ifNull: ['$energyAddedKwh', 0] } },
+          adblueAddedLiters: { $sum: { $ifNull: ['$adblueAddedLiters', 0] } }
         }
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } }
@@ -490,8 +553,30 @@ export default async function Dashboard() {
       .sort({ createdAt: -1 })
       .limit(5)
       .lean(),
-    buildComputedChecklistAlerts()
+    buildComputedChecklistAlerts(),
+    Evaluation.aggregate([
+      { $match: { completedAt: { $gte: thirtyDaysAgo } } },
+      {
+        $group: {
+          _id: null,
+          fuel: { $sum: { $ifNull: ['$fuelAddedLiters', 0] } },
+          energy: { $sum: { $ifNull: ['$energyAddedKwh', 0] } },
+          adblue: { $sum: { $ifNull: ['$adblueAddedLiters', 0] } },
+          kilometers: { $sum: { $ifNull: ['$odometerDelta', 0] } },
+          hours: { $sum: { $ifNull: ['$hourmeterDelta', 0] } }
+        }
+      }
+    ])
   ]);
+
+  const consumptionTotalsRaw = consumptionLast30[0] || {};
+  const consumptionTotals = {
+    fuel: Number(consumptionTotalsRaw.fuel || 0),
+    energy: Number(consumptionTotalsRaw.energy || 0),
+    adblue: Number(consumptionTotalsRaw.adblue || 0),
+    kilometers: Number(consumptionTotalsRaw.kilometers || 0),
+    hours: Number(consumptionTotalsRaw.hours || 0)
+  };
 
   const monthlyStats = monthlyStatsRaw.map((item) => {
     const year = item._id.year;
@@ -502,7 +587,12 @@ export default async function Dashboard() {
       total: item.total,
       ok: item.ok,
       observado: item.observado,
-      critico: item.critico
+      critico: item.critico,
+      hourmeterDelta: item.hourmeterDelta || 0,
+      odometerDelta: item.odometerDelta || 0,
+      fuelAddedLiters: item.fuelAddedLiters || 0,
+      energyAddedKwh: item.energyAddedKwh || 0,
+      adblueAddedLiters: item.adblueAddedLiters || 0
     };
   });
 
@@ -530,8 +620,18 @@ export default async function Dashboard() {
         criticalLast30,
         monthlyStats,
         recentCriticals,
-        notifications
+        notifications,
+        consumption30d: consumptionTotals
       }}
     />
   );
 }
+
+
+
+
+
+
+
+
+

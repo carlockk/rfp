@@ -128,7 +128,12 @@ export async function GET(req: NextRequest) {
             $cond: [{ $eq: ['$status', 'observado'] }, 1, 0]
           }
         },
-        total: { $sum: 1 }
+        total: { $sum: 1 },
+        hourmeterDelta: { $sum: { $ifNull: ['$hourmeterDelta', 0] } },
+        odometerDelta: { $sum: { $ifNull: ['$odometerDelta', 0] } },
+        fuelAddedLiters: { $sum: { $ifNull: ['$fuelAddedLiters', 0] } },
+        energyAddedKwh: { $sum: { $ifNull: ['$energyAddedKwh', 0] } },
+        adblueAddedLiters: { $sum: { $ifNull: ['$adblueAddedLiters', 0] } }
       }
     },
     { $sort: { '_id.date': 1 as const } },
@@ -139,7 +144,12 @@ export async function GET(req: NextRequest) {
         cumple: 1,
         noCumple: 1,
         casoNa: 1,
-        total: 1
+        total: 1,
+        hourmeterDelta: 1,
+        odometerDelta: 1,
+        fuelAddedLiters: 1,
+        energyAddedKwh: 1,
+        adblueAddedLiters: 1
       }
     }
   ];
@@ -148,6 +158,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     data,
-    keys: ['cumple', 'noCumple', 'casoNa']
+    keys: ['cumple', 'noCumple', 'casoNa'],
+    metrics: ['hourmeterDelta', 'odometerDelta', 'fuelAddedLiters', 'energyAddedKwh', 'adblueAddedLiters']
   });
 }
