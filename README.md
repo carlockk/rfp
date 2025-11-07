@@ -37,31 +37,6 @@ Plataforma web para administrar flotas (grúas, ramplas, camionetas, etc.), asig
 - **Cloudinary** para almacenamiento de fotos y evidencias.
 - **Service Worker / PWA** (next-pwa) para soportar trabajo offline.
 
-## Variables de entorno
-Crea `.env.local` copiando desde `.env.example` y completa:
-- URI de MongoDB (`MONGODB_URI`)
-- Secretos JWT (`JWT_SECRET`)
-- Configuración de Cloudinary (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`)
-- URLs públicas (`NEXT_PUBLIC_BASE_URL`, etc.)
-
-## Desarrollo local
-```bash
-npm install   # o pnpm/yarn
-npm run dev   # arranca Next.js en modo desarrollo
-```
-La app queda disponible en `http://localhost:3000`.
-
-## Seed (usuario admin)
-```bash
-npm run seed
-```
-El script crea, si no existe, un usuario admin definido por `ADMIN_DEFAULT_EMAIL` y `ADMIN_DEFAULT_PASSWORD` (ver `.env.example`).
 
 ## Despliegue en Vercel
-1. Repositorio en GitHub (o importar carpeta).
-2. Crear proyecto en Vercel y definir **todas** las variables del `.env.example`.
-3. Construcción por defecto (`next build`).
-4. Configurar Cloudinary y MongoDB Atlas accesibles desde Vercel (IPs con acceso público o Vercel Managed).
-
-## Contacto / soporte
-Si necesitas ampliar funcionalidades (nuevos reportes, más métricas o integraciones externas), crea un issue o escribe al equipo técnico de Flota QR. وی
+https://rfp-five.vercel.app/
