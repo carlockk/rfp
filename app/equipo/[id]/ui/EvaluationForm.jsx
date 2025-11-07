@@ -70,6 +70,18 @@ const findNodeByKey = (nodes, key) => {
   return null;
 };
 
+const MAX_EVIDENCE_FILE_SIZE = 1024 * 1024 * 3;
+const MAX_EVIDENCE_FILES = 3;
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function EvaluationForm({
   equipment,
   checklists,
@@ -91,6 +103,10 @@ export default function EvaluationForm({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [skipChecklist, setSkipChecklist] = useState(false);
+  const [evidencePhotos, setEvidencePhotos] = useState([]);
+  const [evidenceError, setEvidenceError] = useState('');
+  const [evidenceUploadingCount, setEvidenceUploadingCount] = useState(0);
+  const evidenceUploading = evidenceUploadingCount > 0;
 
   const startRef = useRef(new Date());
 
@@ -185,6 +201,12 @@ export default function EvaluationForm({
     setHourmeter('');
     setOdometer('');
   }, [checklistId, equipment.id, skipChecklist, matchedTemplate?.id]);
+
+  useEffect(() => {
+    setEvidencePhotos([]);
+    setEvidenceError('');
+    setEvidenceUploadingCount(0);
+  }, [equipment.id]);
 
   const updateAnswer = (key, value) => {
     setAnswers((prev) => ({
@@ -452,6 +474,12 @@ export default function EvaluationForm({
       return;
     }
 
+    if (evidenceUploading) {
+      setError('Espera a que termine la subida de la foto de respaldo.');
+      setBusy(false);
+      return;
+    }
+
     if (matchedTemplate && !templateState.valid) {
       const missingFields = templateState.missing.slice(0, 3).join(', ');
       setError(
@@ -562,6 +590,7 @@ export default function EvaluationForm({
               attachments: templateState.attachments
             }
           : undefined,
+        evidencePhotos: evidencePhotos.length ? evidencePhotos : undefined,
         skipChecklist
       };
 
@@ -586,9 +615,13 @@ export default function EvaluationForm({
         values: {},
         attachments: [],
         valid: !matchedTemplate,
-        missing: []
+        missing: [],
+        uploading: false
       });
       setSkipChecklist(false);
+      setEvidencePhotos([]);
+      setEvidenceError('');
+      setEvidenceUploadingCount(0);
       onSubmitted?.(true);
       startRef.current = new Date();
     } catch (err) {
@@ -744,6 +777,48 @@ export default function EvaluationForm({
         />
       </div>
 
+      <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+        <label className="label" htmlFor="evidence-photo">Foto de respaldo (opcional)</label>
+        <input
+          id="evidence-photo"
+          type="file"
+          accept="image/*"
+          onChange={handleEvidenceUpload}
+          disabled={evidenceUploading || evidencePhotos.length >= MAX_EVIDENCE_FILES}
+        />
+        <span className="input-hint">Puedes adjuntar hasta {MAX_EVIDENCE_FILES} fotos para documentar la condición del equipo.</span>
+        {evidenceError ? <div style={{ color: 'var(--danger)' }}>{evidenceError}</div> : null}
+        {evidenceUploading ? (
+          <div className="label" style={{ color: 'var(--muted)' }}>Subiendo foto...</div>
+        ) : null}
+        {evidencePhotos.length ? (
+          <div className="evidence-thumbs">
+            {evidencePhotos.map((photo, index) => {
+              const src = photo.url || photo.dataUrl;
+              if (!src) return null;
+              return (
+                <div key={`${photo.name}-${index}`} className="evidence-thumb">
+                  <button
+                    type="button"
+                    className="evidence-thumb__button"
+                    onClick={() => window.open(src, '_blank', 'noopener')}
+                  >
+                    <img src={src} alt={photo.name} className="evidence-thumb__image" />
+                  </button>
+                  <button
+                    type="button"
+                    className="evidence-thumb__remove"
+                    onClick={() => handleEvidenceRemove(index)}
+                  >
+                    Quitar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+
       {error ? <div style={{ color: 'var(--danger)' }}>{error}</div> : null}
       {info ? <div style={{ color: 'var(--accent)' }}>{info}</div> : null}
 
@@ -762,3 +837,59 @@ export default function EvaluationForm({
   );
 }
 
+  const handleEvidenceUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    let remaining = MAX_EVIDENCE_FILES - evidencePhotos.length;
+    if (remaining <= 0) {
+      setEvidenceError(`Puedes adjuntar hasta ${MAX_EVIDENCE_FILES} fotos.`);
+      event.target.value = '';
+      return;
+    }
+
+    for (const file of files) {
+      if (remaining <= 0) break;
+      if (file.size > MAX_EVIDENCE_FILE_SIZE) {
+        setEvidenceError(`El archivo ${file.name} supera los 3MB permitidos.`);
+        continue;
+      }
+      setEvidenceUploadingCount((prev) => prev + 1);
+      try {
+        const dataUrl = await readFileAsDataURL(file);
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileBase64: dataUrl })
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const payload = await response.json();
+        if (!payload?.url) {
+          throw new Error('Respuesta inválida del servidor');
+        }
+        setEvidencePhotos((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            size: file.size,
+            type: file.type || 'image/jpeg',
+            url: payload.url
+          }
+        ]);
+        remaining -= 1;
+        setEvidenceError('');
+      } catch (err) {
+        console.error('No se pudo subir la foto', err);
+        setEvidenceError(err.message || `No se pudo subir ${file.name}`);
+      } finally {
+        setEvidenceUploadingCount((prev) => Math.max(0, prev - 1));
+      }
+    }
+
+    event.target.value = '';
+  };
+
+  const handleEvidenceRemove = (index) => {
+    setEvidencePhotos((prev) => prev.filter((_, idx) => idx !== index));
+  };

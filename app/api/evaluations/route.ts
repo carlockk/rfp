@@ -21,6 +21,7 @@ import {
 
 const VALID_STATUS = new Set(['ok', 'observado', 'critico']);
 const MAX_TEMPLATE_ATTACHMENT_SIZE = 1024 * 1024 * 3;
+const MAX_EVIDENCE_ATTACHMENTS = 3;
 
 type TemplateAttachmentPayload = {
   name?: string;
@@ -67,6 +68,7 @@ type EvaluationPayload = {
   }>;
   template?: TemplatePayload;
   skipChecklist?: boolean;
+  evidencePhotos?: TemplateAttachmentPayload[];
 };
 
 const sanitizeResponses = (responses: EvaluationPayload['responses']) =>
@@ -150,7 +152,7 @@ function extractTemplateMetrics(
   return result;
 }
 
-function sanitizeTemplateAttachments(
+function sanitizeAttachments(
   attachments: TemplatePayload['attachments'],
   maxAllowed: number
 ) {
@@ -322,12 +324,17 @@ export async function POST(req: NextRequest) {
   const effectiveMaxAttachments = attachmentsEnabled ? resolvedMaxAttachments || 3 : 0;
 
   const templateAttachments = attachmentsEnabled
-    ? sanitizeTemplateAttachments(templatePayload.attachments, effectiveMaxAttachments)
+    ? sanitizeAttachments(templatePayload.attachments, effectiveMaxAttachments)
     : [];
 
   if (!attachmentsEnabled && Array.isArray(templatePayload.attachments) && templatePayload.attachments.length) {
     return NextResponse.json({ error: 'La plantilla no permite adjuntos' }, { status: 400 });
   }
+
+  const evidencePhotos = sanitizeAttachments(
+    Array.isArray(payload.evidencePhotos) ? payload.evidencePhotos : [],
+    MAX_EVIDENCE_ATTACHMENTS
+  );
 
   const templateMetrics = extractTemplateMetrics(templateFields, templateValues);
 
@@ -360,6 +367,7 @@ export async function POST(req: NextRequest) {
     templateValues,
     templateFields,
     templateAttachments,
+    evidencePhotos,
     skipChecklist
   };
 

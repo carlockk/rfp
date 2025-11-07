@@ -62,6 +62,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
   const [error, setError] = useState('');
   const [evaluations, setEvaluations] = useState([]);
   const [page, setPage] = useState(1);
+  const [previewEvidence, setPreviewEvidence] = useState(null);
 
   const filteredTechnicians = technicianOptions || [];
   const filteredChecklists = checklistOptions || [];
@@ -323,6 +324,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
               <th>Tecnico</th>
               <th>Estado</th>
               <th>Duracion</th>
+              <th>Fotos</th>
               <th>Observaciones</th>
             </tr>
           </thead>
@@ -348,6 +350,28 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
                   </span>
                 </td>
                 <td>{formatDuration(item.durationSeconds)}</td>
+                <td>
+                  {Array.isArray(item.evidencePhotos) && item.evidencePhotos.length ? (
+                    <div className="evidence-thumbs">
+                      {item.evidencePhotos.map((photo, photoIndex) => {
+                        const src = photo.url || photo.dataUrl;
+                        if (!src) return null;
+                        return (
+                          <button
+                            type="button"
+                            className="evidence-thumb__button"
+                            key={`${photo.name || 'photo'}-${photoIndex}`}
+                            onClick={() => setPreviewEvidence({ src, name: photo.name || `Foto ${photoIndex + 1}` })}
+                          >
+                            <img src={src} alt={photo.name || 'Foto'} className="evidence-thumb__image" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span className="label">-</span>
+                  )}
+                </td>
                 <td style={{ maxWidth: 280 }}>
                   <div className="label">
                     {item.observations || '-'}
@@ -365,7 +389,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
             )) : null}
             {!evaluations.length ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
+                <td colSpan={9} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
                   No hay evaluaciones para los filtros seleccionados.
                 </td>
               </tr>
@@ -380,6 +404,22 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
         total={evaluations.length}
         onPageChange={setPage}
       />
+
+      {previewEvidence ? (
+        <div className="modal-overlay" onClick={() => setPreviewEvidence(null)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <img src={previewEvidence.src} alt={previewEvidence.name} className="modal__image" />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button className="btn" type="button" onClick={() => setPreviewEvidence(null)}>
+                Cerrar
+              </button>
+              <a className="btn primary" href={previewEvidence.src} target="_blank" rel="noreferrer">
+                Abrir
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

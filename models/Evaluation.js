@@ -35,6 +35,18 @@ const EvaluationSchema = new mongoose.Schema({
     ],
     default: []
   },
+  evidencePhotos: {
+    type: [
+      {
+        name: { type: String, required: true },
+        size: { type: Number, required: true },
+        type: { type: String, required: true },
+        url: { type: String, default: '' },
+        dataUrl: { type: String, default: '' }
+      }
+    ],
+    default: []
+  },
   skipChecklist: { type: Boolean, default: false },
   hourmeterCurrent: { type: Number, default: null },
   hourmeterPrevious: { type: Number, default: null },
