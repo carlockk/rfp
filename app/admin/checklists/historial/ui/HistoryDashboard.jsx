@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { DayPicker } from 'react-day-picker';
+import { es } from 'date-fns/locale/es';
+import 'react-day-picker/dist/style.css';
 import PaginationControls from '@/app/ui/PaginationControls';
 
 const STATUS_LABELS = {
@@ -49,10 +52,41 @@ const toCSV = (rows) => {
 
 const PAGE_SIZE = 10;
 
+const startOfDay = (date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+const endOfDay = (date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+const startOfMonth = (date) =>
+  new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+const endOfMonth = (date) =>
+  new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+
+const generateDaysBetween = (start, end) => {
+  const days = [];
+  const current = new Date(start);
+  while (current <= end) {
+    days.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+  return days;
+};
+
+const formatRangeLabel = (from, to) => {
+  if (!from || !to) return 'Sin rango';
+  const formatter = (value) =>
+    value.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+  return `${formatter(from)} - ${formatter(to)}`;
+};
+
+const dayKey = (value) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function HistoryDashboard({ checklistOptions, technicianOptions, equipmentOptions }) {
   const [filters, setFilters] = useState({
-    from: '',
-    to: '',
     checklistId: '',
     technicianId: '',
     equipmentId: '',
@@ -64,12 +98,48 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
   const [page, setPage] = useState(1);
   const [previewEvidence, setPreviewEvidence] = useState(null);
 
+  const today = useMemo(() => new Date(), []);
+  const [selectedDays, setSelectedDays] = useState([]);
+  const [currentMonth, setCurrentMonth] = useState(today);
+
+  const initialFetchDone = useRef(false);
+
+  const dateBounds = useMemo(() => {
+    if (!selectedDays.length) return null;
+    const sorted = selectedDays
+      .slice()
+      .sort((a, b) => a.getTime() - b.getTime());
+    return {
+      from: startOfDay(sorted[0]),
+      to: endOfDay(sorted[sorted.length - 1])
+    };
+  }, [selectedDays]);
+
   const filteredTechnicians = technicianOptions || [];
   const filteredChecklists = checklistOptions || [];
   const filteredEquipments = equipmentOptions || [];
 
+  const selectedDayKeys = useMemo(() => {
+    if (!selectedDays.length) return null;
+    const set = new Set(
+      selectedDays.map((day) => dayKey(startOfDay(day)))
+    );
+    return set;
+  }, [selectedDays]);
+
+  const filteredEvaluations = useMemo(() => {
+    if (!selectedDayKeys || !selectedDayKeys.size) return evaluations;
+    return evaluations.filter((item) => {
+      if (!item?.completedAt) return false;
+      const completed = new Date(item.completedAt);
+      if (Number.isNaN(completed.getTime())) return false;
+      const key = dayKey(startOfDay(completed));
+      return selectedDayKeys.has(key);
+    });
+  }, [evaluations, selectedDayKeys]);
+
   const chartData = useMemo(() => {
-    const counts = evaluations.reduce(
+    const counts = filteredEvaluations.reduce(
       (acc, item) => {
         const key = item.status || 'ok';
         acc[key] = (acc[key] || 0) + 1;
@@ -82,26 +152,26 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
       label: STATUS_LABELS[key] || key,
       value: counts[key] || 0
     }));
-  }, [evaluations]);
+  }, [filteredEvaluations]);
 
-  const totalEvaluations = evaluations.length;
+  const totalEvaluations = filteredEvaluations.length;
 
   const pagedEvaluations = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return evaluations.slice(start, start + PAGE_SIZE);
-  }, [evaluations, page]);
+    return filteredEvaluations.slice(start, start + PAGE_SIZE);
+  }, [filteredEvaluations, page]);
 
   async function fetchEvaluations() {
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
-      if (filters.from) params.append('from', filters.from);
-      if (filters.to) params.append('to', filters.to);
       if (filters.status) params.append('status', filters.status);
       if (filters.checklistId) params.append('checklistId', filters.checklistId);
       if (filters.technicianId) params.append('technicianId', filters.technicianId);
       if (filters.equipmentId) params.append('equipmentId', filters.equipmentId);
+      if (dateBounds?.from) params.append('from', dateBounds.from.toISOString());
+      if (dateBounds?.to) params.append('to', dateBounds.to.toISOString());
 
       const res = await fetch(`/api/evaluations?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(await res.text());
@@ -129,9 +199,20 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (selectedDayKeys && selectedDayKeys.size && !initialFetchDone.current) {
+      initialFetchDone.current = true;
+      fetchEvaluations();
+    }
+    if (selectedDayKeys && selectedDayKeys.size) {
+      setPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDayKeys]);
+
   const handleExportCSV = () => {
-    if (!evaluations.length) return;
-    const rows = evaluations.map((item, index) => ({
+    if (!filteredEvaluations.length) return;
+    const rows = filteredEvaluations.map((item) => ({
       fecha: formatDateTime(item.completedAt),
       checklist: item.checklist?.name || '-',
       version: item.checklistVersion || '-',
@@ -166,7 +247,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
           </div>
         </div>
         <div className="page-header__actions">
-          <button className="btn" onClick={handleExportCSV} disabled={!evaluations.length}>
+          <button className="btn" onClick={handleExportCSV} disabled={!filteredEvaluations.length}>
             Exportar CSV
           </button>
           <button className="btn" onClick={handlePrint}>
@@ -175,27 +256,88 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
         </div>
       </div>
 
+      <div className="date-filter-card" style={{ marginBottom: 16 }}>
+        <DayPicker
+          mode="multiple"
+          month={currentMonth}
+          selected={selectedDays}
+          onSelect={(days) => {
+            if (!days || days.length === 0) {
+              setSelectedDays([]);
+              return;
+            }
+            const sorted = days
+              .slice()
+              .sort((a, b) => a.getTime() - b.getTime());
+            if (sorted.length === 1) {
+              setSelectedDays(sorted);
+              return;
+            }
+            const first = startOfDay(sorted[0]);
+            const last = endOfDay(sorted[sorted.length - 1]);
+            setSelectedDays(generateDaysBetween(first, last));
+          }}
+          onMonthChange={setCurrentMonth}
+          locale={es}
+          showOutsideDays
+          numberOfMonths={1}
+          weekStartsOn={1}
+        />
+        <div className="date-filter__actions">
+          <button
+            type="button"
+            className="date-filter__btn"
+            onClick={() => {
+              const now = new Date();
+              setCurrentMonth(now);
+              setSelectedDays(generateDaysBetween(startOfMonth(now), endOfMonth(now)));
+            }}
+          >
+            Mes actual
+          </button>
+          <button
+            type="button"
+            className="date-filter__btn"
+            onClick={() => {
+              const todayOnly = startOfDay(new Date());
+              setCurrentMonth(todayOnly);
+              setSelectedDays([todayOnly]);
+            }}
+          >
+            Hoy
+          </button>
+          <button
+            type="button"
+            className="date-filter__btn"
+            onClick={() => {
+              const end = new Date();
+              const start = new Date(end);
+              start.setDate(start.getDate() - 6);
+              setCurrentMonth(start);
+              setSelectedDays(generateDaysBetween(startOfDay(start), endOfDay(end)));
+            }}
+          >
+            Últimos 7 días
+          </button>
+          <button
+            type="button"
+            className="date-filter__btn"
+            onClick={() => setSelectedDays([])}
+          >
+            Limpiar
+          </button>
+        </div>
+        <p className="date-filter__summary">
+          {selectedDays.length
+            ? `Seleccionados: ${selectedDays.length} día(s) • ${formatRangeLabel(
+                dateBounds?.from,
+                dateBounds?.to
+              )}`
+            : 'Selecciona uno o más días en el calendario'}
+        </p>
+      </div>
+
       <div className="filters-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: 16 }}>
-        <div>
-          <label className="label" htmlFor="from">Desde</label>
-          <input
-            id="from"
-            className="input"
-            type="date"
-            value={filters.from}
-            onChange={(event) => setFilters((prev) => ({ ...prev, from: event.target.value }))}
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="to">Hasta</label>
-          <input
-            id="to"
-            className="input"
-            type="date"
-            value={filters.to}
-            onChange={(event) => setFilters((prev) => ({ ...prev, to: event.target.value }))}
-          />
-        </div>
         <div>
           <label className="label" htmlFor="checklist">Checklist</label>
           <select

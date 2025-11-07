@@ -36,6 +36,13 @@ export default async function RootLayout({ children }) {
           { href: '/admin/usuarios', label: 'Usuarios' }
         ];
 
+  const variant =
+    session?.role === 'tecnico'
+      ? session?.techProfile === 'candelaria'
+        ? 'candelaria'
+        : 'externo'
+      : 'admin';
+
   return (
     <html lang='es' data-theme='light'>
       <body>
@@ -45,13 +52,13 @@ export default async function RootLayout({ children }) {
           <div className='app-shell'>
             <SidebarContainer links={navLinks} />
             <div className='app-main'>
-              <div className='construction-bar' aria-hidden='true'></div>
               <PushRegistration role={session?.role} />
               <main className='app-content'>
                 <Suspense fallback={<div className='card'>Cargando...</div>}>
                   {children}
                 </Suspense>
               </main>
+              <div className={`construction-bar construction-bar--${variant}`} aria-hidden='true'></div>
             </div>
           </div>
         ) : (
