@@ -39,6 +39,7 @@ export default function SidebarContainer({ links }) {
             />
           </div>
           <span className="sidebar__brand">R F P</span>
+          <span className="sidebar__brand">Control de flotas</span>
         </div>
         <SidebarNav links={links} />
         <div className="sidebar__footer">

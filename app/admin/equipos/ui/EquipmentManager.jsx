@@ -206,7 +206,6 @@ export default function EquipmentManager() {
     <div className="page">
       <div className="page-header">
         <div className="page-header__left">
-          <BackButton fallback="/" />
           <div className="page-header__titles">
             <p className="page-header__eyebrow">Panel de administración</p>
             <h1 className="page-header__title">Equipos</h1>
@@ -309,6 +308,10 @@ export default function EquipmentManager() {
           <span className="input-hint">Completa el formulario y guarda para registrar un nuevo equipo.</span>
         ) : null}
       </SlidingPanel>
+
+      <div className="back-button-row">
+        <BackButton fallback="/" />
+      </div>
     </div>
   );
 }

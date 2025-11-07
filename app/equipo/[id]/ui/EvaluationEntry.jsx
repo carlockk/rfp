@@ -146,17 +146,14 @@ export default function EvaluationEntry({
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <h3 style={{ margin: 0 }}>{displayEquipment.code} - {displayEquipment.type}</h3>
-          <div className="label">
-            {displayEquipment.brand} {displayEquipment.model}{displayEquipment.plate ? ` - ${displayEquipment.plate}` : ''}
-          </div>
-          <div className="label" style={{ marginTop: 4 }}>
-            Perfil técnico: {variant === 'candelaria' ? 'Técnico Candelaria' : 'Técnico externo'}
-          </div>
+      <div style={{ marginBottom: 16 }}>
+        <h3 style={{ margin: 0 }}>{displayEquipment.code} - {displayEquipment.type}</h3>
+        <div className="label">
+          {displayEquipment.brand} {displayEquipment.model}{displayEquipment.plate ? ` - ${displayEquipment.plate}` : ''}
         </div>
-        <BackButton fallback="/" />
+        <div className="label" style={{ marginTop: 4 }}>
+          Perfil técnico: {variant === 'candelaria' ? 'Técnico Candelaria' : 'Técnico externo'}
+        </div>
       </div>
 
       <div className="info-block" style={{ marginBottom: 16 }}>
@@ -234,6 +231,10 @@ export default function EvaluationEntry({
           </div>
         )}
       </SlidingPanel>
+
+      <div className="back-button-row">
+        <BackButton fallback="/" />
+      </div>
     </div>
   );
 }

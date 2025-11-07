@@ -204,7 +204,6 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
     <div className="page">
       <div className="page-header">
         <div className="page-header__left">
-          <BackButton fallback="/" />
           <div className="page-header__titles">
             <p className="page-header__eyebrow">Panel de administracion</p>
             <h1 className="page-header__title">Usuarios</h1>
@@ -354,6 +353,10 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
           {success ? <span className="input-hint" style={{ color: 'var(--accent)' }}>{success}</span> : null}
         </form>
       </SlidingPanel>
+
+      <div className="back-button-row">
+        <BackButton fallback="/" />
+      </div>
     </div>
   );
 }

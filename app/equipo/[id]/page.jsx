@@ -6,6 +6,7 @@ import Checklist from '@/models/Checklist';
 import { serializeChecklist } from '@/lib/checklists';
 import EvaluationTemplate from '@/models/EvaluationTemplate';
 import { normalizeTemplateDoc } from '@/lib/evaluationTemplates';
+import BackButton from '@/app/ui/BackButton';
 import EvaluationEntry from './ui/EvaluationEntry';
 
 export default async function Page({ params }) {
@@ -19,8 +20,11 @@ export default async function Page({ params }) {
   if (!equipmentDoc || equipmentDoc.isActive === false) {
     return (
       <div className="card">
-        <BackButton fallback="/" />
+        <h3 style={{ marginTop: 0 }}>Equipo</h3>
         <p style={{ marginTop: 12 }}>Equipo no encontrado</p>
+        <div className="back-button-row">
+          <BackButton fallback="/" />
+        </div>
       </div>
     );
   }

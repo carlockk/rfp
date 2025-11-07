@@ -231,7 +231,6 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
     <div className="page">
       <div className="page-header">
         <div className="page-header__left">
-          <BackButton fallback="/" />
           <div className="page-header__titles">
             <p className="page-header__eyebrow">Panel del técnico</p>
             <h1 className="page-header__title">Escanear equipo por QR</h1>
@@ -390,6 +389,10 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
           </ul>
         </div>
       )}
+
+      <div className="back-button-row">
+        <BackButton fallback="/" />
+      </div>
 
       {showMobileHint && deeplinkUrl ? (
         <div className="modal-overlay">

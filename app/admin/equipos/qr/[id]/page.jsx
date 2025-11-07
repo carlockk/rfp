@@ -14,8 +14,11 @@ export default async function Page({ params }) {
   if (!id || !mongoose.isValidObjectId(id)) {
     return (
       <div className="card">
-        <BackButton fallback="/admin/equipos" />
+        <h3 style={{ marginTop: 0 }}>QR de equipo</h3>
         <p style={{ marginTop: 12, color: 'var(--danger)' }}>ID inválido.</p>
+        <div className="back-button-row">
+          <BackButton fallback="/admin/equipos" />
+        </div>
       </div>
     );
   }
@@ -24,8 +27,11 @@ export default async function Page({ params }) {
   if (!eq) {
     return (
       <div className="card">
-        <BackButton fallback="/admin/equipos" />
+        <h3 style={{ marginTop: 0 }}>QR de equipo</h3>
         <p style={{ marginTop: 12 }}>No encontrado</p>
+        <div className="back-button-row">
+          <BackButton fallback="/admin/equipos" />
+        </div>
       </div>
     );
   }
@@ -49,15 +55,15 @@ export default async function Page({ params }) {
 
   return (
     <div className="card" style={{ textAlign: 'center' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>QR de {eq.code}</h3>
-        <BackButton fallback="/admin/equipos" />
-      </div>
+      <h3 style={{ marginTop: 0 }}>QR de {eq.code}</h3>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={dataUrl} alt="qr" style={{ background: '#fff', padding: 16, borderRadius: 12 }} />
       <p className="label" style={{ marginTop: 12 }}>
         Apunta a: <code>{url}</code>
       </p>
+      <div className="back-button-row" style={{ justifyContent: 'center' }}>
+        <BackButton fallback="/admin/equipos" />
+      </div>
     </div>
   );
 }

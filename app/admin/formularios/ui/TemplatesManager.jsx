@@ -449,7 +449,6 @@ export default function TemplatesManager({ initialTemplates, canManageAll }) {
     <div className="page">
       <div className="page-header">
         <div className="page-header__left">
-          <BackButton fallback="/" />
           <div className="page-header__titles">
             <p className="page-header__eyebrow">Panel de administracion</p>
             <h1 className="page-header__title">Formularios operativos</h1>
@@ -591,6 +590,10 @@ export default function TemplatesManager({ initialTemplates, canManageAll }) {
           </div>
         </form>
       </SlidingPanel>
+
+      <div className="back-button-row">
+        <BackButton fallback="/" />
+      </div>
     </div>
   );
 }

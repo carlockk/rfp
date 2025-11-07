@@ -53,6 +53,7 @@ export default function LoginPage() {
             style={{ borderRadius: '50%' }}
           />
           <span className="login-panel__brand">R F P</span>
+          <span className="login-panel__brand">Control de flotas</span>
           <h1 className="login-panel__title">Iniciar sesión</h1>
         </div>
         <p className="login-panel__intro">

@@ -12,11 +12,11 @@ export default async function Page({ params }) {
   if (!id || !mongoose.isValidObjectId(id)) {
     return (
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>Editar equipo</h3>
+        <h3 style={{ marginTop: 0 }}>Editar equipo</h3>
+        <p style={{ marginTop: 12, color: 'var(--danger)' }}>ID inválido.</p>
+        <div className="back-button-row">
           <BackButton fallback="/admin/equipos" />
         </div>
-        <p style={{ marginTop: 12, color: 'var(--danger)' }}>ID inválido.</p>
       </div>
     );
   }
@@ -26,11 +26,11 @@ export default async function Page({ params }) {
   if (!eq) {
     return (
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>Editar equipo</h3>
+        <h3 style={{ marginTop: 0 }}>Editar equipo</h3>
+        <p style={{ marginTop: 12 }}>No encontrado</p>
+        <div className="back-button-row">
           <BackButton fallback="/admin/equipos" />
         </div>
-        <p style={{ marginTop: 12 }}>No encontrado</p>
       </div>
     );
   }
@@ -43,11 +43,11 @@ export default async function Page({ params }) {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>Editar equipo</h3>
+      <h3 style={{ marginTop: 0 }}>Editar equipo</h3>
+      <Form data={data} />
+      <div className="back-button-row">
         <BackButton fallback="/admin/equipos" />
       </div>
-      <Form data={data} />
     </div>
   );
 }
