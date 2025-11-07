@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import SlidingPanel from '@/app/ui/SlidingPanel';
+import PaginationControls from '@/app/ui/PaginationControls';
 import ChecklistBuilder from './ChecklistBuilder';
 
 const DEFAULT_OPTIONS = [
@@ -63,6 +64,27 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
   const [saving, setSaving] = useState(false);
   const [equipmentOptions, setEquipmentOptions] = useState([]);
   const [loadingEquipment, setLoadingEquipment] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const sortedChecklists = useMemo(() => {
+    return checklists
+      .slice()
+      .sort((a, b) => {
+        const aDate = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bDate = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bDate - aDate;
+      });
+  }, [checklists]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sortedChecklists.length]);
+
+  const pagedChecklists = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedChecklists.slice(start, start + PAGE_SIZE);
+  }, [sortedChecklists, page]);
 
   const [form, setForm] = useState({
     name: '',
@@ -411,7 +433,7 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
             </tr>
           </thead>
           <tbody>
-            {checklists.map((item) => (
+            {pagedChecklists.map((item) => (
               <tr key={item.id}>
                 <td>{item.name}</td>
                 <td>{item.equipmentType || '-'}</td>
@@ -431,7 +453,7 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
                 </td>
               </tr>
             ))}
-            {checklists.length === 0 ? (
+            {sortedChecklists.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
                   Aún no hay checklists configurados.
@@ -440,6 +462,12 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
             ) : null}
           </tbody>
         </table>
+        <PaginationControls
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={sortedChecklists.length}
+          onPageChange={setPage}
+        />
       </div>
 
       <SlidingPanel

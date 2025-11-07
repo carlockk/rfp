@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import PaginationControls from '@/app/ui/PaginationControls';
 
 const STATUS_LABELS = {
   ok: 'Cumple',
@@ -46,6 +47,8 @@ const toCSV = (rows) => {
   return lines.join('\n');
 };
 
+const PAGE_SIZE = 10;
+
 export default function HistoryDashboard({ checklistOptions, technicianOptions, equipmentOptions }) {
   const [filters, setFilters] = useState({
     from: '',
@@ -58,6 +61,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [evaluations, setEvaluations] = useState([]);
+  const [page, setPage] = useState(1);
 
   const filteredTechnicians = technicianOptions || [];
   const filteredChecklists = checklistOptions || [];
@@ -81,6 +85,11 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
 
   const totalEvaluations = evaluations.length;
 
+  const pagedEvaluations = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return evaluations.slice(start, start + PAGE_SIZE);
+  }, [evaluations, page]);
+
   async function fetchEvaluations() {
     setLoading(true);
     setError('');
@@ -96,7 +105,17 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
       const res = await fetch(`/api/evaluations?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setEvaluations(data);
+      const ordered = Array.isArray(data)
+        ? data
+            .slice()
+            .sort(
+              (a, b) =>
+                new Date(b.completedAt || b.createdAt || 0).getTime() -
+                new Date(a.completedAt || a.createdAt || 0).getTime()
+            )
+        : [];
+      setEvaluations(ordered);
+      setPage(1);
     } catch (err) {
       setError(err.message || 'Error obteniendo evaluaciones');
     } finally {
@@ -308,7 +327,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
             </tr>
           </thead>
           <tbody>
-            {evaluations.map((item, index) => (
+            {evaluations.length ? pagedEvaluations.map((item, index) => (
               <tr key={item._id?.toString?.() || item._id || index}>
                 <td>{formatDateTime(item.completedAt)}</td>
                 <td>{item.checklist?.name || '-'}</td>
@@ -343,7 +362,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
                   </div>
                 </td>
               </tr>
-            ))}
+            )) : null}
             {!evaluations.length ? (
               <tr>
                 <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
@@ -354,6 +373,13 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
           </tbody>
         </table>
       </div>
+
+      <PaginationControls
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={evaluations.length}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

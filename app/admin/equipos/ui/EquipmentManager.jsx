@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import SlidingPanel from '../../../ui/SlidingPanel';
+import PaginationControls from '../../../ui/PaginationControls';
 import EquipmentFormPanel from './EquipmentFormPanel';
 import BackButton from '../../../ui/BackButton';
 
@@ -19,6 +20,8 @@ const EMPTY_EQUIPMENT = {
   notes: ''
 };
 
+const PAGE_SIZE = 10;
+
 export default function EquipmentManager() {
   const [items, setItems] = useState([]);
   const [types, setTypes] = useState([]);
@@ -32,6 +35,7 @@ export default function EquipmentManager() {
   const [assigningId, setAssigningId] = useState('');
   const [assignError, setAssignError] = useState('');
   const [assignInfo, setAssignInfo] = useState('');
+  const [page, setPage] = useState(1);
 
   const hasDraftChanges = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(EMPTY_EQUIPMENT),
@@ -80,6 +84,25 @@ export default function EquipmentManager() {
     const timer = setTimeout(() => setAssignInfo(''), 3000);
     return () => clearTimeout(timer);
   }, [assignInfo]);
+
+  const sortedItems = useMemo(() => {
+    return items
+      .slice()
+      .sort((a, b) => {
+        const aDate = new Date(a.createdAt || a.updatedAt || 0).getTime();
+        const bDate = new Date(b.createdAt || b.updatedAt || 0).getTime();
+        return bDate - aDate;
+      });
+  }, [items]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sortedItems.length]);
+
+  const visibleItems = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedItems.slice(start, start + PAGE_SIZE);
+  }, [sortedItems, page]);
 
   async function handleCreateType(name) {
     const res = await fetch('/api/equipment-types', {
@@ -218,7 +241,7 @@ export default function EquipmentManager() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const equipmentId = String(item._id);
                 const assignedValue = item.assignedTo ? String(item.assignedTo) : '';
                 return (
@@ -252,6 +275,12 @@ export default function EquipmentManager() {
               })}
             </tbody>
           </table>
+          <PaginationControls
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={sortedItems.length}
+            onPageChange={setPage}
+          />
         </div>
       )}
 

@@ -13,10 +13,8 @@ export default function SidebarContainer({ links }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (open) {
-      setOpen(false);
-    }
-  }, [pathname, open]);
+    setOpen(false);
+  }, [pathname]);
 
   return (
     <>

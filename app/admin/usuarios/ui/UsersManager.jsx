@@ -1,8 +1,9 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import SlidingPanel from '../../../ui/SlidingPanel';
 import BackButton from '../../../ui/BackButton';
+import PaginationControls from '../../../ui/PaginationControls';
 
 const defaultForm = {
   name: '',
@@ -23,6 +24,8 @@ const profileLabels = {
   candelaria: 'Tecnico Candelaria'
 };
 
+const PAGE_SIZE = 10;
+
 export default function UsersManager({ initialUsers, canManageSuperadmin }) {
   const rawFormId = useId();
   const formId = useMemo(
@@ -37,6 +40,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
   const [success, setSuccess] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingId, setEditingId] = useState('');
+  const [page, setPage] = useState(1);
 
   const availableRoles = useMemo(
     () => (canManageSuperadmin ? ['tecnico', 'admin', 'superadmin'] : ['tecnico', 'admin']),
@@ -47,6 +51,24 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
 
   const isEditing = Boolean(editingId);
 
+  const sortedUsers = useMemo(() => {
+    return users
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+  }, [users]);
+
+  const pagedUsers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedUsers.slice(start, start + PAGE_SIZE);
+  }, [sortedUsers, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sortedUsers.length]);
+
   async function refresh() {
     setRefreshing(true);
     setError('');
@@ -55,6 +77,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setUsers(data);
+      setPage(1);
     } catch (err) {
       setError(err.message || 'No se pudo actualizar la lista');
     } finally {
@@ -214,7 +237,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {pagedUsers.map((user) => (
               <tr key={user.id}>
                 <td>{user.name || '-'}</td>
                 <td>{user.email}</td>
@@ -231,9 +254,15 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
             ))}
           </tbody>
         </table>
-        {users.length === 0 ? (
+        {sortedUsers.length === 0 ? (
           <div style={{ marginTop: 12, color: 'var(--muted)' }}>No hay usuarios registrados.</div>
         ) : null}
+        <PaginationControls
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={sortedUsers.length}
+          onPageChange={setPage}
+        />
       </div>
 
       <SlidingPanel
