@@ -51,8 +51,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  equipment.assignedTo = user ? user._id : null;
-  equipment.assignedAt = user ? new Date() : null;
+  if (user) {
+    equipment.operators = [
+      { user: user._id, assignedAt: new Date() }
+    ];
+    equipment.assignedTo = user._id;
+    equipment.assignedAt = new Date();
+  } else {
+    equipment.operators = [];
+    equipment.assignedTo = null;
+    equipment.assignedAt = null;
+  }
   await equipment.save();
 
   await logAudit({
@@ -65,7 +74,8 @@ export async function POST(req: NextRequest) {
     details: {
       equipmentId: equipment._id.toString(),
       assignedTo: equipment.assignedTo?.toString(),
-      assignedAt: equipment.assignedAt
+      assignedAt: equipment.assignedAt,
+      operatorCount: equipment.operators.length
     }
   });
 
@@ -77,7 +87,11 @@ export async function POST(req: NextRequest) {
       brand: equipment.brand,
       model: equipment.model,
       assignedTo: equipment.assignedTo?.toString() || null,
-      assignedAt: equipment.assignedAt
+      assignedAt: equipment.assignedAt,
+      operators: equipment.operators.map((op) => ({
+        user: op.user?.toString(),
+        assignedAt: op.assignedAt
+      }))
     }
   });
 }

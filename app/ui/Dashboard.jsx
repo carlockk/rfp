@@ -420,9 +420,15 @@ export default async function Dashboard() {
   if (!session) redirect('/login');
 
   if (session.role === 'tecnico') {
+    const technicianId = mongoose.Types.ObjectId.isValid(session.id)
+      ? new mongoose.Types.ObjectId(session.id)
+      : session.id;
     const assignedEquipmentsDocs = await Equipment.find({
       isActive: true,
-      assignedTo: session.id
+      $or: [
+        { assignedTo: technicianId },
+        { operators: { $elemMatch: { user: technicianId } } }
+      ]
     })
       .select('code type')
       .sort({ code: 1 })

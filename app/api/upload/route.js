@@ -11,7 +11,8 @@ export async function POST(req){
   const { fileBase64 } = await req.json(); // data URL o base64
   if (!fileBase64) return new Response('No file', { status:400 });
   const res = await cloudinary.uploader.upload(fileBase64, {
-    folder: process.env.CLOUDINARY_FOLDER || 'flota-app'
+    folder: process.env.CLOUDINARY_FOLDER || 'flota-app',
+    resource_type: 'auto'
   });
   return Response.json({ url: res.secure_url });
 }

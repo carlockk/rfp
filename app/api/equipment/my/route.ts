@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
@@ -14,11 +15,16 @@ export async function GET() {
   }
 
   await dbConnect();
+  const userId = mongoose.isValidObjectId(session.id) ? new mongoose.Types.ObjectId(session.id) : null;
+
   const equipments = await Equipment.find({
     isActive: true,
-    assignedTo: session.id
+    $or: [
+      { assignedTo: session.id },
+      { operators: { $elemMatch: { user: userId } } }
+    ]
   })
-    .select('code type brand model plate fuel assignedAt')
+    .select('code type brand model plate fuel operators assignedAt assignedTo')
     .sort({ code: 1 })
     .lean();
 

@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import BackButton from '@/app/ui/BackButton';
 import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
@@ -21,7 +22,9 @@ export default async function Page({ params }) {
     );
   }
 
-  const eq = await Equipment.findById(id).lean();
+  const eq = await Equipment.findById(id)
+    .populate('operators.user','name email role techProfile')
+    .lean();
 
   if (!eq) {
     return (

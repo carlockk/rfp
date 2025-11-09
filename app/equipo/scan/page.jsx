@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import Equipment from '@/models/Equipment';
@@ -19,11 +20,18 @@ export default async function Page() {
     redirect('/');
   }
 
+  const technicianId = mongoose.Types.ObjectId.isValid(session.id)
+    ? new mongoose.Types.ObjectId(session.id)
+    : session.id;
+
   const assignedDocs = await Equipment.find({
     isActive: true,
-    assignedTo: session.id
+    $or: [
+      { assignedTo: technicianId },
+      { operators: { $elemMatch: { user: technicianId } } }
+    ]
   })
-    .select('code type brand model plate fuel adblue notes')
+    .select('code type brand model plate fuel adblue notes operators')
     .sort({ code: 1 })
     .lean();
 
@@ -36,7 +44,13 @@ export default async function Page() {
     plate: doc.plate || '',
     fuel: doc.fuel || '',
     adblue: Boolean(doc.adblue),
-    notes: doc.notes || ''
+    notes: doc.notes || '',
+    operators: Array.isArray(doc.operators)
+      ? doc.operators.map((op) => ({
+          user: op?.user ? op.user.toString() : '',
+          assignedAt: op?.assignedAt || null
+        }))
+      : []
   }));
 
   const checklistsRaw = await Checklist.find({

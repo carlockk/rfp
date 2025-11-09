@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import BackButton from '../../../ui/BackButton';
 import SlidingPanel from '../../../ui/SlidingPanel';
 import EvaluationForm from './EvaluationForm';
+import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
 
 function normalizeProfile(value) {
   const key = (value || '').toLowerCase();
@@ -152,7 +153,7 @@ export default function EvaluationEntry({
           {displayEquipment.brand} {displayEquipment.model}{displayEquipment.plate ? ` - ${displayEquipment.plate}` : ''}
         </div>
         <div className="label" style={{ marginTop: 4 }}>
-          Perfil técnico: {variant === 'candelaria' ? 'Técnico Candelaria' : 'Técnico externo'}
+          Perfil del operador: {getOperatorProfileLabel(variant)}
         </div>
       </div>
 

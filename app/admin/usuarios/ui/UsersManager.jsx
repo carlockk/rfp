@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import SlidingPanel from '../../../ui/SlidingPanel';
 import BackButton from '../../../ui/BackButton';
+import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
 import PaginationControls from '../../../ui/PaginationControls';
 
 const defaultForm = {
@@ -16,12 +17,12 @@ const defaultForm = {
 const roleLabels = {
   superadmin: 'Super admin',
   admin: 'Admin',
-  tecnico: 'Tecnico'
+  tecnico: 'Operador'
 };
 
 const profileLabels = {
-  externo: 'Tecnico externo',
-  candelaria: 'Tecnico Candelaria'
+  externo: getOperatorProfileLabel('externo'),
+  candelaria: getOperatorProfileLabel('candelaria')
 };
 
 const PAGE_SIZE = 10;
@@ -217,7 +218,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
         </div>
       </div>
       <p className="page-header__subtitle">
-        Desde aqui puedes crear cuentas para administradores y tecnicos.
+        Desde aqui puedes crear cuentas para administradores y operadores.
       </p>
 
       {error && !panelOpen ? <div style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div> : null}
@@ -334,7 +335,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
           </div>
           {form.role === 'tecnico' ? (
             <div className="form-field">
-              <label className="label" htmlFor="techProfile">Perfil tecnico</label>
+            <label className="label" htmlFor="techProfile">Perfil del operador</label>
               <select
                 id="techProfile"
                 className="input"

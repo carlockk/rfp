@@ -100,14 +100,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
       equipment = await Equipment.findOne({
         _id: candidate,
         isActive: true
-      }).lean<Record<string, any>>();
+      })
+        .lean<Record<string, any>>();
     }
 
     if (!equipment) {
       equipment = await Equipment.findOne({
         code: new RegExp(`^${escapeRegex(candidate)}$`, 'i'),
         isActive: true
-      }).lean<Record<string, any>>();
+      })
+        .lean<Record<string, any>>();
     }
 
     if (equipment) {
@@ -120,8 +122,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 
   const assignedToCurrent =
-    equipment.assignedTo &&
-    equipment.assignedTo.toString() === String(session.id);
+    (Array.isArray(equipment.operators) &&
+      equipment.operators.some(
+        (op: any) => op?.user && op.user.toString() === String(session.id)
+      )) ||
+    (equipment.assignedTo &&
+      equipment.assignedTo.toString() === String(session.id));
 
   return NextResponse.json({
     equipment: {
@@ -138,7 +144,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
       odometerBase: equipment.odometerBase,
       assignedTo: equipment.assignedTo ? equipment.assignedTo.toString() : null,
       assignedAt: equipment.assignedAt,
-      isActive: equipment.isActive
+      isActive: equipment.isActive,
+      operators: Array.isArray(equipment.operators)
+        ? equipment.operators.map((op: any) => ({
+            user: op?.user ? op.user.toString() : null,
+            assignedAt: op?.assignedAt || null
+          }))
+        : []
     },
     assignedToCurrent
   });

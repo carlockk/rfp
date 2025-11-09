@@ -13,27 +13,41 @@ const EMPTY_EQUIPMENT = {
   adblue: false,
   hourmeterBase: '',
   odometerBase: '',
-  notes: ''
+  notes: '',
+  operators: []
 };
 
 export default function Form({ data }) {
   const router = useRouter();
   const [form, setForm] = useState(() => {
     if (!data) return EMPTY_EQUIPMENT;
+    const normalizedOperators = Array.isArray(data.operators)
+      ? data.operators
+          .map((op) => {
+            if (typeof op === 'string') return op;
+            if (op?.user?._id) return op.user._id.toString();
+            if (op?.user) return op.user.toString();
+            return '';
+          })
+          .filter(Boolean)
+      : [];
     return {
       ...EMPTY_EQUIPMENT,
       ...data,
       hourmeterBase: data.hourmeterBase ?? '',
-      odometerBase: data.odometerBase ?? ''
+      odometerBase: data.odometerBase ?? '',
+      operators: normalizedOperators
     };
   });
   const [types, setTypes] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState('');
   const isEdit = useMemo(() => Boolean(data?._id), [data]);
 
   useEffect(() => {
     fetchTypes();
+    fetchTechnicians();
   }, []);
 
   async function fetchTypes() {
@@ -49,6 +63,17 @@ export default function Form({ data }) {
       });
     } catch (err) {
       setFeedback(err.message || 'No se pudieron cargar los tipos');
+    }
+  }
+
+  async function fetchTechnicians() {
+    try {
+      const res = await fetch('/api/users?role=tecnico', { cache: 'no-store' });
+      if (!res.ok) throw new Error(await res.text());
+      const payload = await res.json();
+      setTechnicians(payload);
+    } catch (err) {
+      setFeedback(err.message || 'No se pudieron cargar los operadores');
     }
   }
 
@@ -75,7 +100,10 @@ export default function Form({ data }) {
       const payload = {
         ...form,
         hourmeterBase: form.hourmeterBase ? Number(form.hourmeterBase) : 0,
-        odometerBase: form.odometerBase ? Number(form.odometerBase) : 0
+        odometerBase: form.odometerBase ? Number(form.odometerBase) : 0,
+        operators: Array.isArray(form.operators)
+          ? form.operators.filter((id) => typeof id === 'string' && id)
+          : []
       };
       const res = await fetch(isEdit ? `/api/equipments/${data._id}` : '/api/equipments', {
         method: isEdit ? 'PUT' : 'POST',
@@ -101,6 +129,7 @@ export default function Form({ data }) {
         types={types}
         onAddType={handleAddType}
         busy={loading}
+        technicians={technicians}
       />
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <button className="btn" onClick={() => router.back()} disabled={loading}>Cancelar</button>

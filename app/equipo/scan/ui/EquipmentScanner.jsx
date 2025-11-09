@@ -18,7 +18,7 @@ function normalizeEquipment(equipment) {
     fuel: equipment.fuel || '',
     adblue: Boolean(equipment.adblue),
     notes: equipment.notes || '',
-    assignedTo: equipment.assignedTo || '',
+    operators: Array.isArray(equipment.operators) ? equipment.operators : [],
     assignedAt: equipment.assignedAt || null
   };
 }
@@ -232,7 +232,7 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
       <div className="page-header">
         <div className="page-header__left">
           <div className="page-header__titles">
-            <p className="page-header__eyebrow">Panel del técnico</p>
+            <p className="page-header__eyebrow">Panel del operador</p>
             <h1 className="page-header__title">Escanear equipo por QR</h1>
           </div>
         </div>

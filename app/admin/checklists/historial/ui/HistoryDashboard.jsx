@@ -355,7 +355,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
           </select>
         </div>
         <div>
-          <label className="label" htmlFor="technician">Tecnico</label>
+          <label className="label" htmlFor="technician">Operador</label>
           <select
             id="technician"
             className="input"
@@ -463,7 +463,7 @@ export default function HistoryDashboard({ checklistOptions, technicianOptions, 
               <th>Checklist</th>
               <th>Version</th>
               <th>Equipo</th>
-              <th>Tecnico</th>
+              <th>Operador</th>
               <th>Estado</th>
               <th>Duracion</th>
               <th>Fotos</th>

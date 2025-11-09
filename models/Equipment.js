@@ -14,6 +14,23 @@ const EquipmentSchema = new mongoose.Schema({
   notes: String,
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   assignedAt: { type: Date, default: null },
+  operators: [
+    {
+      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      assignedAt: { type: Date, default: Date.now }
+    }
+  ],
+  documents: [
+    {
+      _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+      name: { type: String, required: true },
+      type: { type: String, required: true },
+      url: { type: String, required: true },
+      size: { type: Number },
+      uploadedAt: { type: Date, default: Date.now },
+      uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    }
+  ],
   isActive: { type: Boolean, default: true },
   deletedAt: { type: Date, default: null }
 }, { timestamps: true });

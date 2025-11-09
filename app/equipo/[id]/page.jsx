@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import Equipment from '@/models/Equipment';
@@ -29,6 +30,11 @@ export default async function Page({ params }) {
     );
   }
 
+  const operatorEntries = Array.isArray(equipmentDoc.operators) ? equipmentDoc.operators : [];
+  const operatorUserIds = operatorEntries.map((op) =>
+    op?.user ? op.user.toString() : ''
+  );
+
   const equipment = {
     id: equipmentDoc._id.toString(),
     code: equipmentDoc.code,
@@ -40,19 +46,30 @@ export default async function Page({ params }) {
     adblue: Boolean(equipmentDoc.adblue),
     notes: equipmentDoc.notes || '',
     assignedTo: equipmentDoc.assignedTo ? equipmentDoc.assignedTo.toString() : '',
-    assignedAt: equipmentDoc.assignedAt ? equipmentDoc.assignedAt.toISOString?.() || equipmentDoc.assignedAt : null
+    assignedAt: equipmentDoc.assignedAt ? equipmentDoc.assignedAt.toISOString?.() || equipmentDoc.assignedAt : null,
+    operators: operatorEntries.map((op) => ({
+      user: op?.user ? op.user.toString() : '',
+      assignedAt: op?.assignedAt ? op.assignedAt.toISOString?.() || op.assignedAt : null
+    }))
   };
 
   const assignedToUser =
     session.role !== 'tecnico'
       ? true
-      : equipmentDoc.assignedTo && equipmentDoc.assignedTo.toString() === session.id;
+      : operatorUserIds.includes(session.id) ||
+        (equipmentDoc.assignedTo && equipmentDoc.assignedTo.toString() === session.id);
 
   let assignedEquipments = [];
   if (session.role === 'tecnico' && session.id) {
+    const technicianId = mongoose.Types.ObjectId.isValid(session.id)
+      ? new mongoose.Types.ObjectId(session.id)
+      : session.id;
     const assignedDocs = await Equipment.find({
       isActive: true,
-      assignedTo: session.id
+      $or: [
+        { assignedTo: technicianId },
+        { operators: { $elemMatch: { user: technicianId } } }
+      ]
     })
       .select('code type brand model plate fuel')
       .sort({ code: 1 })

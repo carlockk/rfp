@@ -5,6 +5,7 @@ import Link from 'next/link';
 import SlidingPanel from '@/app/ui/SlidingPanel';
 import PaginationControls from '@/app/ui/PaginationControls';
 import ChecklistBuilder from './ChecklistBuilder';
+import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
 
 const DEFAULT_OPTIONS = [
   { key: 'cumple', label: 'Cumple' },
@@ -13,8 +14,8 @@ const DEFAULT_OPTIONS = [
 ];
 
 const PROFILE_OPTIONS = [
-  { value: 'externo', label: 'Técnico externo' },
-  { value: 'candelaria', label: 'Técnico Candelaria' }
+  { value: 'externo', label: getOperatorProfileLabel('externo') },
+  { value: 'candelaria', label: getOperatorProfileLabel('candelaria') }
 ];
 
 const newId = (prefix = 'node') =>
@@ -65,6 +66,7 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
   const [equipmentOptions, setEquipmentOptions] = useState([]);
   const [loadingEquipment, setLoadingEquipment] = useState(false);
   const [page, setPage] = useState(1);
+  const [deletingId, setDeletingId] = useState('');
   const PAGE_SIZE = 10;
 
   const sortedChecklists = useMemo(() => {
@@ -208,7 +210,7 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
     setPanelOpen(true);
     setLoadingStructure(true);
     try {
-      const res = await fetch(`/api/checklists/${id}?includeStructure=true`);
+      const res = await fetch(`/api/checklists/${id}?includeStructure=true&includeInactive=true`);
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -389,6 +391,25 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
     }
   }
 
+  async function handleDelete(id, name) {
+    if (typeof window !== 'undefined') {
+      const confirmDelete = window.confirm(`¿Eliminar definitivamente el checklist "${name}"?`);
+      if (!confirmDelete) return;
+    }
+    setDeletingId(id);
+    setError('');
+    try {
+      const res = await fetch(`/api/checklists/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      setChecklists((prev) => prev.filter((item) => item.id !== id));
+      setMessage('Checklist eliminado.');
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el checklist');
+    } finally {
+      setDeletingId('');
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -436,22 +457,30 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
             {pagedChecklists.map((item) => (
               <tr key={item.id}>
                 <td>{item.name}</td>
-                <td>{item.equipmentType || '-'}</td>
-                <td>v{item.currentVersion || 1}</td>
-                <td>{item.isActive ? 'Activo' : 'Archivado'}</td>
-                <td>{formatDate(item.updatedAt)}</td>
-                <td style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn" onClick={() => openEditor(item.id)}>
-                    Editar
-                  </button>
-                  <button
-                    className="btn"
-                    onClick={() => toggleActive(item.id, !item.isActive)}
-                  >
-                    {item.isActive ? 'Archivar' : 'Restaurar'}
-                  </button>
-                </td>
-              </tr>
+              <td>{item.equipmentType || '-'}</td>
+              <td>v{item.currentVersion || 1}</td>
+              <td>{item.isActive ? 'Activo' : 'Archivado'}</td>
+              <td>{formatDate(item.updatedAt)}</td>
+              <td style={{ display: 'flex', gap: 8 }}>
+                <button className="btn" onClick={() => openEditor(item.id)}>
+                  Editar
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => toggleActive(item.id, !item.isActive)}
+                >
+                  {item.isActive ? 'Archivar' : 'Activar'}
+                </button>
+                <button
+                  className="btn"
+                  style={{ color: 'var(--danger)' }}
+                  disabled={deletingId === item.id}
+                  onClick={() => handleDelete(item.id, item.name)}
+                >
+                  {deletingId === item.id ? 'Eliminando…' : 'Eliminar'}
+                </button>
+              </td>
+            </tr>
             ))}
             {sortedChecklists.length === 0 ? (
               <tr>
@@ -572,7 +601,26 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
             </div>
             <div className="form-field">
               <label className="label">Perfiles con checklist obligatorio</label>
-              <div className="input-stack">
+              <textarea
+                className="input input--chips"
+                rows={PROFILE_OPTIONS.length}
+                readOnly
+                value={PROFILE_OPTIONS.map((option) => {
+                  const checked = form.mandatoryProfiles.includes(option.value);
+                  const marker = checked ? '✔' : '○';
+                  return `${marker} ${option.label}`;
+                }).join('\n')}
+                onClick={() => {
+                  const nextProfile =
+                    PROFILE_OPTIONS.find((option) => !form.mandatoryProfiles.includes(option.value))?.value ||
+                    PROFILE_OPTIONS[0].value;
+                  toggleMandatoryProfile(nextProfile);
+                }}
+              />
+              <span className="input-hint">
+                Haz clic para alternar perfiles obligatorios. Si al menos uno está marcado, ese perfil debe completar el checklist.
+              </span>
+              <div className="input-stack" style={{ marginTop: 8 }}>
                 {PROFILE_OPTIONS.map((option) => (
                   <label key={option.value} className="input-choice">
                     <input
@@ -584,9 +632,6 @@ export default function ChecklistsManager({ initialChecklists, canCreate }) {
                   </label>
                 ))}
               </div>
-              <span className="input-hint">
-                Si marcas un perfil como obligatorio, siempre deberá completar el checklist.
-              </span>
             </div>
             <div className="form-field">
               <label className="label" htmlFor="description">Descripción</label>

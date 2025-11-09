@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import BackButton from '../../../ui/BackButton';
 import SlidingPanel from '../../../ui/SlidingPanel';
 import { TEMPLATE_METRIC_OPTIONS } from '@/lib/templateMetrics';
+import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
 
 const DEFAULT_TEMPLATE = {
   id: '',
@@ -424,7 +425,7 @@ export default function TemplatesManager({ initialTemplates, canManageAll }) {
         </div>
         <div className="template-card__meta">
           <p className="label">
-            Perfil: {template.techProfile === 'todos' ? 'Todos los tecnicos' : template.techProfile}
+            Perfil: {template.techProfile === 'todos' ? 'Todos los operadores' : getOperatorProfileLabel(template.techProfile)}
           </p>
           <p className="label">
             Checklist {template.isChecklistMandatory ? 'obligatorio' : 'opcional'}
@@ -464,7 +465,7 @@ export default function TemplatesManager({ initialTemplates, canManageAll }) {
         </div>
       </div>
       <p className="page-header__subtitle">
-        Configura los formularios que los tecnicos deben completar antes o despues de cada checklist.
+        Configura los formularios que los operadores deben completar antes o después de cada checklist.
       </p>
 
       {error ? <div style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div> : null}
@@ -511,7 +512,7 @@ export default function TemplatesManager({ initialTemplates, canManageAll }) {
             />
           </div>
           <div className="form-field">
-            <label className="label" htmlFor="template-profile">Perfil tecnico</label>
+            <label className="label" htmlFor="template-profile">Perfil del operador</label>
             <select
               id="template-profile"
               className="input"
@@ -519,8 +520,8 @@ export default function TemplatesManager({ initialTemplates, canManageAll }) {
               onChange={(event) => setForm((prev) => ({ ...prev, techProfile: event.target.value }))}
             >
               <option value="todos">Todos</option>
-              <option value="externo">Tecnico externo</option>
-              <option value="candelaria">Tecnico Candelaria</option>
+              <option value="externo">{getOperatorProfileLabel('externo')}</option>
+              <option value="candelaria">{getOperatorProfileLabel('candelaria')}</option>
             </select>
           </div>
           <div className="form-field">

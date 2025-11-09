@@ -267,8 +267,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (session.role === 'tecnico') {
-    const assignedTo = equipment.assignedTo?.toString();
-    if (assignedTo !== String(session.id)) {
+    const operatorMatches =
+      Array.isArray(equipment.operators) &&
+      equipment.operators.some(
+        (op) =>
+          op?.user &&
+          op.user.toString() === String(session.id)
+      );
+    const assignedMatches =
+      equipment.assignedTo &&
+      equipment.assignedTo.toString() === String(session.id);
+
+    if (!operatorMatches && !assignedMatches) {
       return NextResponse.json({ error: 'No autorizado para este equipo' }, { status: 403 });
     }
   }
@@ -395,7 +405,7 @@ export async function POST(req: NextRequest) {
 
   const evaluation = await Evaluation.create(evaluationData);
 
-  const contextName = checklist?.name || templateName || 'Formulario tecnico';
+  const contextName = checklist?.name || templateName || 'Formulario de operador';
 
   if (status === 'critico') {
     const notification = await Notification.create({
