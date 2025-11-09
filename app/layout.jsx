@@ -10,11 +10,14 @@ export const metadata = {
   title: process.env.NEXT_PUBLIC_APP_NAME || 'Flota QR',
   description: 'Gestión de flota con QR, consumo y mantenciones',
   manifest: '/manifest.json',
-  themeColor: '#0b4f6c',
   icons: [
     { rel: 'icon', url: '/log.png', sizes: '256x256' },
     { rel: 'apple-touch-icon', url: '/flota.png', sizes: '512x512' }
   ]
+};
+
+export const viewport = {
+  themeColor: '#0b4f6c'
 };
 
 export default async function RootLayout({ children }) {
