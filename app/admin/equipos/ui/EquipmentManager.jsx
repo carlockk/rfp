@@ -38,6 +38,7 @@ export default function EquipmentManager() {
   const [docsError, setDocsError] = useState('');
   const [docsUploading, setDocsUploading] = useState(false);
   const [page, setPage] = useState(1);
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const hasDraftChanges = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(EMPTY_EQUIPMENT),
@@ -192,6 +193,7 @@ export default function EquipmentManager() {
     setDocsEquipment(null);
     setDocsError('');
     setDocsUploading(false);
+    setPreviewDoc(null);
   };
 
   const readFileAsDataURL = (file) =>
@@ -409,18 +411,23 @@ export default function EquipmentManager() {
               <div className="documents-grid">
                 {docsEquipment.documents.map((doc) => (
                   <div key={doc._id || doc.url} className="document-card">
-                    {doc.type?.startsWith('image/') ? (
-                      <img
-                        src={doc.url}
-                        alt={doc.name}
-                        className="document-card__preview"
-                        onClick={() => window.open(doc.url, '_blank', 'noopener')}
-                      />
-                    ) : (
-                      <div className="document-card__pdf" onClick={() => window.open(doc.url, '_blank', 'noopener')}>
-                        PDF
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      className="document-card__preview-button"
+                      onClick={() => setPreviewDoc(doc)}
+                    >
+                      {isImageDoc(doc) ? (
+                        <img
+                          src={doc.url}
+                          alt={doc.name}
+                          className="document-card__preview"
+                        />
+                      ) : (
+                        <div className="document-card__pdf">
+                          PDF
+                        </div>
+                      )}
+                    </button>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                       <span style={{ maxWidth: '70%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {doc.name}
@@ -443,6 +450,30 @@ export default function EquipmentManager() {
           </>
         ) : null}
       </SlidingPanel>
+      {previewDoc ? (
+        <div className="modal-overlay" onClick={() => setPreviewDoc(null)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>{previewDoc.name || 'Documento'}</h3>
+            {isImageDoc(previewDoc) ? (
+              <img src={previewDoc.url} alt={previewDoc.name} className="modal__image" />
+            ) : (
+              <iframe
+                src={previewDoc.url}
+                title={previewDoc.name || 'Documento PDF'}
+                className="modal__frame"
+              ></iframe>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <a className="btn" href={previewDoc.url} target="_blank" rel="noreferrer">
+                Descargar
+              </a>
+              <button className="btn primary" type="button" onClick={() => setPreviewDoc(null)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="back-button-row">
         <BackButton fallback="/" />
@@ -450,3 +481,11 @@ export default function EquipmentManager() {
     </div>
   );
 }
+  const isImageDoc = (doc) => {
+    if (!doc) return false;
+    if (doc.type?.startsWith('image/')) return true;
+    if (typeof doc.name === 'string') {
+      return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(doc.name);
+    }
+    return false;
+  };

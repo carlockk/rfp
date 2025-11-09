@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import flotaLogo from '@/public/log.png';
+import { isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,11 +22,23 @@ export default function LoginPage() {
     setLoading(true);
     setMessage('Autenticando...');
 
+    const normalizedEmail = sanitizeEmail(email);
+    if (!isValidEmail(normalizedEmail)) {
+      setMessage('Ingresa un email valido.');
+      setLoading(false);
+      return;
+    }
+    if (!isValidPassword(password, { minLength: 6, maxLength: 120 })) {
+      setMessage('La contrase�a debe tener entre 6 y 120 caracteres.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: normalizedEmail, password })
       });
       if (res.ok) {
         setMessage('Ingreso correcto, redirigiendo...');
@@ -69,6 +82,7 @@ export default function LoginPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
+              maxLength={120}
             />
           </div>
           <div style={{ display: 'grid', gap: 6 }}>
@@ -80,6 +94,7 @@ export default function LoginPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               minLength={6}
+              maxLength={120}
               required
             />
           </div>

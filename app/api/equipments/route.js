@@ -4,6 +4,7 @@ import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
 import { requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { sanitizeEquipmentPayload } from '@/lib/equipmentPayload';
 
 const uniqueObjectIds = (ids = []) => {
   const seen = new Set();
@@ -40,12 +41,26 @@ export async function GET(){
 export async function POST(req){
   const ses = await requireRole('admin');
   if (!ses) return new Response('Forbidden', { status:403 });
-  const data = await req.json();
+
+  let data;
+  try {
+    data = await req.json();
+  } catch {
+    return new Response('Payload invalido', { status: 400 });
+  }
+
+  let sanitized;
+  try {
+    sanitized = sanitizeEquipmentPayload(data);
+  } catch (err) {
+    return new Response(err.message || 'Datos invalidos', { status: 400 });
+  }
+
   await dbConnect();
 
   const operators = normalizeOperators(data.operators || []);
   const payload = {
-    ...data,
+    ...sanitized,
     operators
   };
   if (operators.length) {

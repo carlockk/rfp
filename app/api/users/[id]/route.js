@@ -5,6 +5,7 @@ import { dbConnect } from '@/lib/db';
 import User from '@/models/User';
 import { requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { assertSafeText, isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
 
 export async function PUT(req, { params }) {
   const ses = await requireRole('superadmin');
@@ -24,8 +25,21 @@ export async function PUT(req, { params }) {
 
   const updates = {};
 
-  if (typeof payload.name === 'string') updates.name = payload.name.trim();
-  if (typeof payload.email === 'string') updates.email = payload.email.trim();
+  if (payload.name !== undefined) {
+    const normalizedName = assertSafeText(payload.name, { minLength: 2, maxLength: 80 });
+    if (!normalizedName) {
+      return NextResponse.json({ error: 'Nombre invalido' }, { status: 400 });
+    }
+    updates.name = normalizedName;
+  }
+
+  if (payload.email !== undefined) {
+    const normalizedEmail = sanitizeEmail(payload.email);
+    if (!isValidEmail(normalizedEmail)) {
+      return NextResponse.json({ error: 'Email invalido' }, { status: 400 });
+    }
+    updates.email = normalizedEmail;
+  }
 
   const allowedRoles = ['superadmin', 'admin', 'tecnico'];
   if (payload.role) {
@@ -45,7 +59,7 @@ export async function PUT(req, { params }) {
   }
 
   if (payload.password) {
-    if (payload.password.length < 6) {
+    if (!isValidPassword(payload.password, { minLength: 6, maxLength: 120 })) {
       return NextResponse.json({ error: 'La contrasena debe tener al menos 6 caracteres' }, { status: 400 });
     }
     updates.password = await bcrypt.hash(payload.password, 10);

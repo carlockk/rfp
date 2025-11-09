@@ -3,9 +3,23 @@ import { dbConnect } from '@/lib/db';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 import { signToken, setAuthCookie } from '@/lib/auth';
+import { isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
 
 export async function POST(req){
-  const { email, password } = await req.json();
+  let payload;
+  try {
+    payload = await req.json();
+  } catch {
+    return new Response('Payload invalido', { status:400 });
+  }
+
+  const email = sanitizeEmail(payload?.email);
+  const password = typeof payload?.password === 'string' ? payload.password : '';
+
+  if (!isValidEmail(email) || !isValidPassword(password, { minLength: 6, maxLength: 120 })) {
+    return new Response('Credenciales invalidas', { status:400 });
+  }
+
   await dbConnect();
   const user = await User.findOne({ email });
   if (!user) return new Response('Unauthorized', { status:401 });

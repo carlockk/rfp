@@ -3,6 +3,7 @@ import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 import { requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { assertSafeText, isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
 
 function sanitize(user) {
   return {
@@ -42,10 +43,28 @@ export async function GET(req) {
 export async function POST(req) {
   const ses = await requireRole(['admin', 'superadmin']);
   if (!ses) return new Response('Unauthorized', { status: 401 });
-  const { name = '', email, password, role, techProfile = '' } = await req.json();
 
-  if (!email || !password || !role) {
-    return new Response('Datos incompletos', { status: 400 });
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response('Payload invalido', { status: 400 });
+  }
+
+  const { name = '', email, password, role, techProfile = '' } = body || {};
+
+  const normalizedName = assertSafeText(name, { minLength: 2, maxLength: 80 });
+  if (!normalizedName) {
+    return new Response('Nombre invalido', { status: 400 });
+  }
+
+  const normalizedEmail = sanitizeEmail(email);
+  if (!isValidEmail(normalizedEmail)) {
+    return new Response('Email invalido', { status: 400 });
+  }
+
+  if (!isValidPassword(password, { minLength: 6, maxLength: 120 })) {
+    return new Response('La contrasena debe tener al menos 6 caracteres', { status: 400 });
   }
 
   const allowedRoles = ses.role === 'admin' ? ['admin', 'tecnico'] : ['admin', 'tecnico', 'superadmin'];
@@ -53,13 +72,9 @@ export async function POST(req) {
     return new Response('Rol invalido', { status: 400 });
   }
 
-  if (password.length < 6) {
-    return new Response('La contrasena debe tener al menos 6 caracteres', { status: 400 });
-  }
-
   await dbConnect();
 
-  const existing = await User.findOne({ email });
+  const existing = await User.findOne({ email: normalizedEmail });
   if (existing) {
     return new Response('Email ya registrado', { status: 409 });
   }
@@ -72,8 +87,8 @@ export async function POST(req) {
 
   const hashed = await bcrypt.hash(password, 10);
   const user = await User.create({
-    name,
-    email,
+    name: normalizedName,
+    email: normalizedEmail,
     password: hashed,
     role,
     techProfile: profile

@@ -1004,6 +1004,13 @@ a{color:inherit;text-decoration:none}
   object-fit:cover;
   cursor:pointer;
 }
+.document-card__preview-button{
+  background:none;
+  border:0;
+  padding:0;
+  width:100%;
+  cursor:pointer;
+}
 .document-card__pdf{
   width:100%;
   height:120px;
@@ -1013,4 +1020,11 @@ a{color:inherit;text-decoration:none}
   align-items:center;
   justify-content:center;
   font-weight:600;
+}
+.modal__frame{
+  width:100%;
+  min-height:60vh;
+  border:0;
+  border-radius:12px;
+  background:#fff;
 }

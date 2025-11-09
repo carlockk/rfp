@@ -5,6 +5,7 @@ import SlidingPanel from '../../../ui/SlidingPanel';
 import BackButton from '../../../ui/BackButton';
 import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
 import PaginationControls from '../../../ui/PaginationControls';
+import { assertSafeText, SAFE_TEXT_PATTERN } from '@/lib/validation';
 
 const defaultForm = {
   name: '',
@@ -132,6 +133,13 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
     setError('');
     setSuccess('');
 
+    const normalizedName = assertSafeText(form.name, { minLength: 2, maxLength: 80 });
+    if (!normalizedName) {
+      setError('El nombre es obligatorio y solo puede contener letras, numeros y puntuacion basica.');
+      setSaving(false);
+      return;
+    }
+
     if (!availableRoles.includes(form.role)) {
       setError('Rol no permitido');
       setSaving(false);
@@ -152,7 +160,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
 
     try {
       const payload = {
-        name: form.name,
+        name: normalizedName,
         email: form.email,
         role: form.role,
         techProfile: form.role === 'tecnico' ? form.techProfile : '',
@@ -286,7 +294,12 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
               className="input"
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="Nombre (opcional)"
+              placeholder="Nombre completo"
+              required
+              minLength={2}
+              maxLength={80}
+              pattern={SAFE_TEXT_PATTERN}
+              title="Solo letras, numeros y puntuacion basica"
             />
           </div>
           <div className="form-field">
@@ -298,6 +311,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
               required
               value={form.email}
               onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+              maxLength={120}
             />
           </div>
           <div className="form-field">

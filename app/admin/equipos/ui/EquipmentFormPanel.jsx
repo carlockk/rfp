@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
+import { SAFE_TEXT_PATTERN } from '@/lib/validation';
 
 const resolveOperatorLabel = (technician) => {
   if (!technician) return '';
@@ -61,6 +62,9 @@ export default function EquipmentFormPanel({ value, onChange, types, onAddType, 
           onChange={(event) => onChange({ ...value, code: event.target.value })}
           placeholder="Código o identificador"
           required
+          maxLength={40}
+          pattern={SAFE_TEXT_PATTERN}
+          title="Solo letras, numeros y puntuacion basica"
         />
       </div>
       <div className="form-field">
@@ -140,6 +144,9 @@ export default function EquipmentFormPanel({ value, onChange, types, onAddType, 
           className="input"
           value={value.brand}
           onChange={(event) => onChange({ ...value, brand: event.target.value })}
+          maxLength={60}
+          pattern={SAFE_TEXT_PATTERN}
+          title="Solo letras, numeros y puntuacion basica"
         />
       </div>
       <div className="form-field">
@@ -149,6 +156,9 @@ export default function EquipmentFormPanel({ value, onChange, types, onAddType, 
           className="input"
           value={value.model}
           onChange={(event) => onChange({ ...value, model: event.target.value })}
+          maxLength={60}
+          pattern={SAFE_TEXT_PATTERN}
+          title="Solo letras, numeros y puntuacion basica"
         />
       </div>
       <div className="form-field">
@@ -158,6 +168,9 @@ export default function EquipmentFormPanel({ value, onChange, types, onAddType, 
           className="input"
           value={value.plate}
           onChange={(event) => onChange({ ...value, plate: event.target.value })}
+          maxLength={30}
+          pattern={SAFE_TEXT_PATTERN}
+          title="Solo letras, numeros y puntuacion basica"
         />
       </div>
       <div className="form-field">
@@ -190,6 +203,8 @@ export default function EquipmentFormPanel({ value, onChange, types, onAddType, 
           rows={3}
           value={value.notes}
           onChange={(event) => onChange({ ...value, notes: event.target.value })}
+          maxLength={280}
+          title="Solo letras, numeros y puntuacion basica"
         />
       </div>
       <div className="form-field form-field--full">
