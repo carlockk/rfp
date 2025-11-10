@@ -44,7 +44,8 @@ export default function EvaluationEntry({
   techProfile,
   checklists = [],
   sessionRole,
-  templates = []
+  templates = [],
+  showBackButton = true
 }) {
   const variant = techProfile === 'candelaria' ? 'candelaria' : 'externo';
 
@@ -233,9 +234,11 @@ export default function EvaluationEntry({
         )}
       </SlidingPanel>
 
-      <div className="back-button-row">
-        <BackButton fallback="/" />
-      </div>
+      {showBackButton ? (
+        <div className="back-button-row">
+          <BackButton fallback="/" />
+        </div>
+      ) : null}
     </div>
   );
 }

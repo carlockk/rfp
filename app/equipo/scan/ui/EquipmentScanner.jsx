@@ -362,6 +362,7 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
           checklists={checklists}
           sessionRole="tecnico"
           templates={templates}
+          showBackButton={false}
         />
       ) : (
         <div className="card">
