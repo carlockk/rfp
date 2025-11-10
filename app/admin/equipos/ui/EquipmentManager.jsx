@@ -7,26 +7,12 @@
 
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
-
-
 import Link from 'next/link';
-
-
-
 import SlidingPanel from '../../../ui/SlidingPanel';
-
-
-
 import PaginationControls from '../../../ui/PaginationControls';
-
-
-
 import EquipmentFormPanel from './EquipmentFormPanel';
-
-
-
 import BackButton from '../../../ui/BackButton';
+import { cacheEquipments, readCachedEquipments } from '@/lib/offline/resources';
 
 
 
@@ -370,6 +356,41 @@ export default function EquipmentManager() {
 
 
 
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator === 'undefined' ? false : !navigator.onLine
+  );
+
+
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const updateStatus = () => setIsOffline(!navigator.onLine);
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+    };
+  }, []);
+
+
+
+  const loadCachedEquipments = useCallback(async () => {
+    const cached = await readCachedEquipments();
+    if (Array.isArray(cached) && cached.length) {
+      setItems(cached);
+      setUsingCachedData(true);
+    } else {
+      setUsingCachedData(false);
+    }
+  }, []);
+
+
+
+  const [usingCachedData, setUsingCachedData] = useState(false);
+
+
+
 
 
 
@@ -395,122 +416,44 @@ export default function EquipmentManager() {
 
 
   const refreshData = useCallback(async () => {
-
-
-
-    try {
-
-
-
-      setLoading(true);
-
-
-
-      const [equipmentsRes, typesRes, techniciansRes] = await Promise.all([
-
-
-
-        fetch('/api/equipments', { cache: 'no-store' }),
-
-
-
-        fetch('/api/equipment-types', { cache: 'no-store' }),
-
-
-
-        fetch('/api/users?role=tecnico', { cache: 'no-store' })
-
-
-
-      ]);
-
-
-
-      if (!equipmentsRes.ok) throw new Error('No se pudo cargar equipos');
-
-
-
-      if (!typesRes.ok) throw new Error('No se pudo cargar tipos');
-
-
-
-      if (!techniciansRes.ok) throw new Error('No se pudo cargar tecnicos');
-
-
-
-      const [equipments, typesPayload, techniciansPayload] = await Promise.all([
-
-
-
-        equipmentsRes.json(),
-
-
-
-        typesRes.json(),
-
-
-
-        techniciansRes.json()
-
-
-
-      ]);
-
-
-
-      setItems(equipments);
-
-
-
-      setTypes(typesPayload);
-
-
-
-      setTechnicians(techniciansPayload);
-
-
-
-      setDraft((prev) => {
-
-
-
-        if (prev.type || typesPayload.length === 0) return prev;
-
-
-
-        return { ...prev, type: typesPayload[0].name };
-
-
-
-      });
-
-
-
-      setError('');
-
-
-
-    } catch (err) {
-
-
-
-      setError(err.message || 'Error cargando datos');
-
-
-
-    } finally {
-
-
-
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
       setLoading(false);
-
-
-
+      setError('');
+      await loadCachedEquipments();
+      return;
     }
-
-
-
-  }, []);
+    try {
+      setUsingCachedData(false);
+      setLoading(true);
+      const [equipmentsRes, typesRes, techniciansRes] = await Promise.all([
+        fetch('/api/equipments', { cache: 'no-store' }),
+        fetch('/api/equipment-types', { cache: 'no-store' }),
+        fetch('/api/users?role=tecnico', { cache: 'no-store' })
+      ]);
+      if (!equipmentsRes.ok) throw new Error('No se pudo cargar equipos');
+      if (!typesRes.ok) throw new Error('No se pudo cargar tipos');
+      if (!techniciansRes.ok) throw new Error('No se pudo cargar tecnicos');
+      const [equipments, typesPayload, techniciansPayload] = await Promise.all([
+        equipmentsRes.json(),
+        typesRes.json(),
+        techniciansRes.json()
+      ]);
+      setItems(equipments);
+      cacheEquipments(equipments).catch(() => {});
+      setTypes(typesPayload);
+      setTechnicians(techniciansPayload);
+      setDraft((prev) => {
+        if (prev.type || typesPayload.length === 0) return prev;
+        return { ...prev, type: typesPayload[0].name };
+      });
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Error cargando datos');
+      await loadCachedEquipments();
+    } finally {
+      setLoading(false);
+    }
+  }, [loadCachedEquipments]);
 
 
 
@@ -1566,7 +1509,15 @@ export default function EquipmentManager() {
 
 
 
-
+      {usingCachedData ? (
+        <div className="offline-hint">
+          Modo offline: mostrando datos almacenados en este dispositivo.
+        </div>
+      ) : isOffline ? (
+        <div className="offline-hint">
+          Sin conexión. Intentando cargar los datos guardados localmente.
+        </div>
+      ) : null}
 
 
 

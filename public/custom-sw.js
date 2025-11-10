@@ -1,3 +1,63 @@
+const OFFLINE_DB_NAME = 'flota_offline';
+const OFFLINE_DB_VERSION = 2;
+const EVALUATION_STORE = 'evaluations_queue';
+
+function openQueueDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(EVALUATION_STORE)) {
+        db.createObjectStore(EVALUATION_STORE, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getQueuedEvaluations() {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(EVALUATION_STORE, 'readonly');
+    const store = tx.objectStore(EVALUATION_STORE);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deleteQueuedEvaluation(id) {
+  const db = await openQueueDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(EVALUATION_STORE, 'readwrite');
+    tx.objectStore(EVALUATION_STORE).delete(id);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function syncEvaluationsInBackground() {
+  const endpoint = new URL('/api/evaluations', self.location.origin).href;
+  const queued = await getQueuedEvaluations();
+  for (const item of queued) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item.payload)
+      });
+      if (!response.ok) {
+        throw new Error('Error enviando evaluación');
+      }
+      await deleteQueuedEvaluation(item.id);
+    } catch (error) {
+      console.error('Fallo al sincronizar evaluaciones en background', error);
+      throw error;
+    }
+  }
+}
+
 self.addEventListener('push', (event) => {
   if (!event.data) {
     return;
@@ -50,4 +110,10 @@ self.addEventListener('notificationclick', (event) => {
       }
     })()
   );
+});
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-evaluations') {
+    event.waitUntil(syncEvaluationsInBackground());
+  }
 });

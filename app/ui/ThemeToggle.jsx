@@ -1,5 +1,7 @@
 'use client';
+
 import { useEffect, useState } from 'react';
+import { readSetting, writeSetting } from '@/lib/offline/settings';
 
 const THEMES = ['light', 'dark'];
 const ICONS = { light: '\u2600', dark: '\u263E' };
@@ -14,20 +16,29 @@ export default function ThemeToggle() {
   const [theme, setTheme] = useState('light');
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem('theme');
-    const initial = stored === 'dark' ? 'dark' : 'light';
-    setTheme(initial);
-    applyTheme(initial);
+    let mounted = true;
+    const loadTheme = async () => {
+      let stored = await readSetting('theme');
+      if (!stored && typeof window !== 'undefined') {
+        stored = window.localStorage?.getItem('theme');
+      }
+      const initial = stored === 'dark' ? 'dark' : 'light';
+      if (mounted) {
+        setTheme(initial);
+        applyTheme(initial);
+      }
+    };
+    loadTheme();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  function toggleTheme() {
+  async function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('theme', next);
-    }
     applyTheme(next);
+    await writeSetting('theme', next);
   }
 
   const icon = ICONS[theme] || ICONS.light;

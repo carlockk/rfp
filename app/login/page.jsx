@@ -2,20 +2,41 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import flotaLogo from '@/public/log.png';
 import { isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(new Date());
 
+  // Tema
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem('theme') : null;
     const target = stored === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', target);
   }, []);
+
+  // Reloj (se actualiza cada 30 segundos)
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const dateStr = now.toLocaleDateString('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+
+  const timeStr = now.toLocaleTimeString('es-CL', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 
   async function onSubmit(event) {
     event.preventDefault();
@@ -24,12 +45,12 @@ export default function LoginPage() {
 
     const normalizedEmail = sanitizeEmail(email);
     if (!isValidEmail(normalizedEmail)) {
-      setMessage('Ingresa un email valido.');
+      setMessage('Ingresa un email válido.');
       setLoading(false);
       return;
     }
     if (!isValidPassword(password, { minLength: 6, maxLength: 120 })) {
-      setMessage('La contrase�a debe tener entre 6 y 120 caracteres.');
+      setMessage('La contraseña debe tener entre 6 y 120 caracteres.');
       setLoading(false);
       return;
     }
@@ -55,6 +76,19 @@ export default function LoginPage() {
 
   return (
     <div className="login-hero">
+      {/* Barra superior */}
+      <div className="login-topbar" aria-live="polite">
+        <div className="login-topbar__left">
+          <span className="login-topbar__title">Control de flotas</span>
+        </div>
+        <div className="login-topbar__right">
+          <span className="login-topbar__date">{dateStr}</span>
+          <span className="login-topbar__sep">•</span>
+          <span className="login-topbar__time">{timeStr}</span>
+        </div>
+      </div>
+
+      {/* Panel de login */}
       <div className="login-panel">
         <div className="login-panel__header">
           <Image
@@ -69,9 +103,11 @@ export default function LoginPage() {
           <span className="login-panel__brand">Control de flotas</span>
           <h1 className="login-panel__title">Iniciar sesión</h1>
         </div>
+
         <p className="login-panel__intro">
           Administra tu flota, asigna técnicos y sigue el consumo de cada equipo desde un solo lugar.
         </p>
+
         <form onSubmit={onSubmit} style={{ display: 'grid', gap: 16 }}>
           <div style={{ display: 'grid', gap: 6 }}>
             <label className="label" htmlFor="email">Email</label>
@@ -85,22 +121,33 @@ export default function LoginPage() {
               maxLength={120}
             />
           </div>
-          <div style={{ display: 'grid', gap: 6 }}>
+
+          {/* Campo contraseña con ojito */}
+          <div style={{ display: 'grid', gap: 6, position: 'relative' }}>
             <label className="label" htmlFor="password">Contraseña</label>
             <input
               id="password"
               className="input login-input"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               minLength={6}
               maxLength={120}
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="toggle-password"
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-            <button className="btn primary" disabled={loading}>
-              {loading ? 'Ingresando...' : 'Entrar'}
+            <button className="btn login" disabled={loading}>
+              {loading ? 'Ingresando...' : 'Ingresar'}
             </button>
             <span style={{ color: 'var(--muted)', minHeight: 20 }}>{message}</span>
           </div>

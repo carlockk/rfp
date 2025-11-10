@@ -95,6 +95,18 @@ a{color:inherit;text-decoration:none}
 .btn.primary:hover{
   background:linear-gradient(180deg,#a3eac4,#6fcf9c);
 }
+
+.btn.login{
+  background:linear-gradient(180deg,#ffee90,#fee766);
+  border-color:#ffc266;
+  color:#000000;
+}
+.btn.login:hover{
+  background:linear-gradient(180deg,#000000,#2f2800);
+border-color:#7b744c;
+  color:#ffffff;
+}
+
 .input,select,textarea{
   width:100%;
   background:var(--input-bg);
@@ -109,6 +121,39 @@ a{color:inherit;text-decoration:none}
 .table{width:100%;border-collapse:collapse}
 .table th,.table td{border-bottom:1px solid var(--table-border);padding:8px;text-align:left;font-size:0.95em}
 .table--compact th,.table--compact td{font-size:0.85em}
+.network-banner{
+  position:fixed;
+  bottom:12px;
+  left:50%;
+  transform:translateX(-50%);
+  min-width:260px;
+  padding:10px 16px;
+  text-align:center;
+  font-size:0.9em;
+  font-weight:500;
+  z-index:2000;
+  border-radius:999px;
+  border:1px solid transparent;
+  box-shadow:0 8px 24px rgba(0,0,0,0.2);
+}
+.network-banner--online{
+  background:#004C62;
+  color:#ffffff;
+  border-color:#002c3a;
+}
+.network-banner--offline{
+  background:#7A0011;
+  color:#ffffff;
+  border-color:#4d000b;
+}
+.offline-hint{
+  border:1px dashed var(--border);
+  border-radius:8px;
+  padding:10px 14px;
+  font-size:0.9em;
+  color:var(--muted);
+  background:rgba(148,163,184,0.12);
+}
 .table-wrapper{
   width:100%;
   overflow-x:auto;
@@ -1085,4 +1130,86 @@ a{color:inherit;text-decoration:none}
   border:0;
   border-radius:12px;
   background:#fff;
+}
+
+/* === BARRA SUPERIOR LOGIN === */
+.login-topbar{
+  position:fixed;
+  top:0;
+  left:50%;
+  transform:translateX(-50%);
+  width: 100%;
+  height:42px;
+  padding:0 32px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+
+  background:rgba(0,0,0,0.65);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+
+  color:#f9fafb;
+  z-index:80; /* por encima del panel (que está en 50) */
+}
+
+.login-topbar__title{
+  font-size:13px;
+  letter-spacing:0.28em;
+  text-transform:uppercase;
+  font-weight:600;
+  opacity:0.94;
+}
+
+.login-topbar__right{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+  opacity:0.9;
+}
+
+.login-topbar__date{
+  font-weight:500;
+}
+
+.login-topbar__time{
+  font-variant-numeric:tabular-nums;
+  font-weight:600;
+}
+
+.login-topbar__sep{
+  opacity:0.6;
+}
+
+/* Responsive */
+@media (max-width: 640px){
+  .login-topbar{
+    height:56px;
+    padding:0 16px;
+    font-size:12px;
+  }
+  .login-topbar__title{
+    letter-spacing:0.18em;
+    font-size:12px;
+  }
+}
+
+/* === Botón de ojito en input de contraseña === */
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 73%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+}
+
+.toggle-password:hover {
+  opacity: 1;
+  transform: translateY(-50%) scale(1.1);
 }

@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 
 export default function OfflineBanner() {
-  const [isOffline, setIsOffline] = useState(
-    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  const [online, setOnline] = useState(
+    typeof navigator === 'undefined' ? true : navigator.onLine
   );
 
   useEffect(() => {
     function updateStatus() {
-      setIsOffline(!navigator.onLine);
+      setOnline(navigator.onLine);
     }
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
@@ -19,26 +19,15 @@ export default function OfflineBanner() {
     };
   }, []);
 
-  if (!isOffline) return null;
+  const message = online
+    ? 'Conexión restablecida: los cambios se sincronizan automáticamente.'
+    : 'Modo offline: tus cambios se guardarán cuando vuelva la conexión.';
+
+  const stateClass = online ? 'network-banner--online' : 'network-banner--offline';
 
   return (
-    <div
-      role="status"
-      aria-live="assertive"
-      style={{
-        position: 'fixed',
-        bottom: 16,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        background: '#0b4f6c',
-        color: '#fff',
-        padding: '12px 20px',
-        borderRadius: 999,
-        boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
-        zIndex: 1000
-      }}
-    >
-      Sin conexión. Las evaluaciones se enviarán automáticamente al reconectar.
+    <div role="status" aria-live="polite" className={`network-banner ${stateClass}`}>
+      {message}
     </div>
   );
 }

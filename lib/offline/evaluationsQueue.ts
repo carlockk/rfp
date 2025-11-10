@@ -1,5 +1,8 @@
 'use client';
 
+import { getOfflineDB, hasIndexedDB, registerBackgroundSync } from './db';
+import { appendRecord } from './resources';
+
 type EvaluationPayload = Record<string, unknown>;
 
 type QueuedEvaluation = {
@@ -8,57 +11,8 @@ type QueuedEvaluation = {
   createdAt: number;
 };
 
-const DB_NAME = 'flota_offline';
 const STORE_NAME = 'evaluations_queue';
-const DB_VERSION = 1;
-
-let dbPromise: Promise<IDBDatabase> | null = null;
-
-const hasIndexedDB = () =>
-  typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
-
-function openDB(): Promise<IDBDatabase> {
-  if (!hasIndexedDB()) {
-    return Promise.reject(new Error('IndexedDB no disponible'));
-  }
-  if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-  return dbPromise;
-}
-
-function runTransaction<T>(
-  mode: IDBTransactionMode,
-  runner: (store: IDBObjectStore) => IDBRequest<T> | void
-): Promise<T | undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise<T | undefined>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, mode);
-        const store = tx.objectStore(STORE_NAME);
-        const request = runner(store);
-        tx.oncomplete = () => {
-          if (request && 'result' in request) {
-            resolve(request.result as T);
-          } else {
-            resolve(undefined);
-          }
-        };
-        tx.onabort = () => reject(tx.error);
-        tx.onerror = () => reject(tx.error);
-      })
-  );
-}
+const SYNC_TAG = 'sync-evaluations';
 
 function createId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -67,28 +21,41 @@ function createId() {
   return `queued-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export async function enqueueEvaluation(payload: EvaluationPayload) {
+async function enqueueEvaluation(payload: EvaluationPayload) {
   if (!hasIndexedDB()) return;
-  await runTransaction('readwrite', (store) =>
-    store.put({
-      id: createId(),
-      payload,
-      createdAt: Date.now()
-    } as QueuedEvaluation)
-  );
+  const db = getOfflineDB();
+  if (!db) return;
+  const database = await db;
+  const id = createId();
+  await database.put(STORE_NAME, {
+    id,
+    payload,
+    createdAt: Date.now()
+  } as QueuedEvaluation);
+  await appendRecord('mantenciones', {
+    id,
+    status: 'pendiente',
+    payload,
+    storedAt: new Date().toISOString()
+  });
+  await registerBackgroundSync(SYNC_TAG);
 }
 
 async function getQueuedEvaluations(): Promise<QueuedEvaluation[]> {
   if (!hasIndexedDB()) return [];
-  const result = await runTransaction<QueuedEvaluation[]>('readonly', (store) =>
-    store.getAll()
-  );
-  return result ?? [];
+  const db = getOfflineDB();
+  if (!db) return [];
+  const database = await db;
+  const result = await database.getAll(STORE_NAME);
+  return (result as QueuedEvaluation[] | undefined) ?? [];
 }
 
 async function removeQueuedEvaluation(id: string) {
   if (!hasIndexedDB()) return;
-  await runTransaction('readwrite', (store) => store.delete(id));
+  const db = getOfflineDB();
+  if (!db) return;
+  const database = await db;
+  await database.delete(STORE_NAME, id);
 }
 
 async function postEvaluation(payload: EvaluationPayload) {
@@ -101,6 +68,12 @@ async function postEvaluation(payload: EvaluationPayload) {
     const text = await response.text();
     throw new Error(text || 'Error enviando evaluación');
   }
+  await appendRecord('mantenciones', {
+    id: createId(),
+    status: 'sincronizado',
+    payload,
+    syncedAt: new Date().toISOString()
+  });
   return response;
 }
 
