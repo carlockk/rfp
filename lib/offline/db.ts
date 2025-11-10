@@ -41,6 +41,16 @@ interface FlotaOfflineDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<FlotaOfflineDB>> | null = null;
 
+type BackgroundSyncRegistration = ServiceWorkerRegistration & {
+  sync: SyncManager;
+};
+
+const hasBackgroundSync = (
+  registration: ServiceWorkerRegistration
+): registration is BackgroundSyncRegistration =>
+  typeof registration.sync !== 'undefined' &&
+  typeof registration.sync.register === 'function';
+
 export const hasIndexedDB = () =>
   typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
 
@@ -77,6 +87,12 @@ export async function registerBackgroundSync(tag: string) {
   }
   try {
     const registration = await navigator.serviceWorker.ready;
+
+    if (!hasBackgroundSync(registration)) {
+      console.warn('Background Sync API not available in this browser');
+      return;
+    }
+
     await registration.sync.register(tag);
   } catch (error) {
     console.warn('No se pudo registrar sincronización en segundo plano', error);
