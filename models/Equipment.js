@@ -26,6 +26,7 @@ const EquipmentSchema = new mongoose.Schema({
       name: { type: String, required: true },
       type: { type: String, required: true },
       url: { type: String, required: true },
+      publicId: { type: String },
       size: { type: Number },
       uploadedAt: { type: Date, default: Date.now },
       uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
 import { requireRole } from '@/lib/auth';
+import cloudinary from '@/lib/cloudinary';
 
 const isSupportedDocument = (type = '') =>
   /^image\//.test(type) || type === 'application/pdf';
@@ -27,7 +28,7 @@ export async function POST(req, { params }) {
     return new Response('Invalid payload', { status: 400 });
   }
 
-  const { name, url, type, size } = payload || {};
+  const { name, url, type, size, publicId } = payload || {};
   if (!name || !url || !type) {
     return new Response('Missing document data', { status: 400 });
   }
@@ -42,6 +43,7 @@ export async function POST(req, { params }) {
     url,
     type,
     size: typeof size === 'number' ? size : null,
+    publicId: typeof publicId === 'string' && publicId ? publicId : undefined,
     uploadedAt: new Date(),
     uploadedBy: mongoose.isValidObjectId(ses.id) ? new mongoose.Types.ObjectId(ses.id) : undefined
   };
@@ -77,6 +79,26 @@ export async function DELETE(req, { params }) {
   }
 
   await dbConnect();
+  const equipment = await Equipment.findOne(
+    { _id: equipmentId, 'documents._id': documentId },
+    { 'documents.$': 1 }
+  ).lean();
+
+  if (!equipment || !equipment.documents?.length) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  const targetDoc = equipment.documents[0];
+
+  if (targetDoc.publicId) {
+    const resourceType = targetDoc.type === 'application/pdf' ? 'raw' : 'image';
+    try {
+      await cloudinary.uploader.destroy(targetDoc.publicId, { resource_type: resourceType });
+    } catch (err) {
+      console.error('No se pudo eliminar archivo en Cloudinary', err);
+    }
+  }
+
   const updated = await populateEquipment(
     Equipment.findByIdAndUpdate(
       equipmentId,

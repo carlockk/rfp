@@ -542,7 +542,7 @@ export default function EvaluationForm({
       const formData = {
         ...(!skipChecklist ? answers : {}),
         estado_general: status,
-        observaciones,
+        observaciones: observations,
         checklistId: skipChecklist ? null : checklistId,
         checklistNombre: skipChecklist ? '' : selectedChecklist?.name,
         variante: variant,
