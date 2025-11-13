@@ -289,6 +289,7 @@ export default function EquipmentManager() {
 
 
   const [items, setItems] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
 
 
@@ -511,6 +512,41 @@ export default function EquipmentManager() {
 
   }, [items]);
 
+  const filteredItems = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return sortedItems;
+    return sortedItems.filter((item) => {
+      const operatorBlob = Array.isArray(item.operators)
+        ? item.operators
+            .map((entry) => {
+              const user = entry?.user || entry;
+              if (!user) return '';
+              if (typeof user === 'string') return user;
+              if (typeof user === 'object') {
+                if (user.name && user.email) return `${user.name} ${user.email}`;
+                return user.name || user.email || '';
+              }
+              return '';
+            })
+            .join(' ')
+        : '';
+      const fields = [
+        item.code,
+        item.type,
+        item.brand,
+        item.model,
+        item.plate,
+        item.fuel,
+        item.notes,
+        operatorBlob
+      ];
+      return fields.some(
+        (value) => typeof value === 'string' && value.toLowerCase().includes(query)
+      );
+    });
+  }, [sortedItems, searchTerm]);
+
+
 
 
 
@@ -527,6 +563,12 @@ export default function EquipmentManager() {
 
   }, [sortedItems.length]);
 
+  useEffect(() => {
+
+    setPage(1);
+
+  }, [searchTerm]);
+
 
 
 
@@ -541,11 +583,11 @@ export default function EquipmentManager() {
 
 
 
-    return sortedItems.slice(start, start + PAGE_SIZE);
+    return filteredItems.slice(start, start + PAGE_SIZE);
 
 
 
-  }, [sortedItems, page]);
+  }, [filteredItems, page]);
 
 
 
@@ -1493,6 +1535,18 @@ export default function EquipmentManager() {
 
 
 
+          <input
+            type="search"
+            className="input"
+            placeholder="Buscar equipos..."
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            style={{ minWidth: 220 }}
+            aria-label="Buscar equipos"
+          />
+
+
+
           <button className="btn primary" onClick={openPanel}>Nuevo equipo</button>
 
 
@@ -1538,6 +1592,14 @@ export default function EquipmentManager() {
 
 
         <div style={{ color: 'var(--muted)' }}>No hay equipos registrados.</div>
+
+
+
+      ) : filteredItems.length === 0 ? (
+
+
+
+        <div style={{ color: 'var(--muted)' }}>No se encontraron equipos para la búsqueda actual.</div>
 
 
 
@@ -1841,7 +1903,7 @@ export default function EquipmentManager() {
 
 
 
-            total={sortedItems.length}
+            total={filteredItems.length}
 
 
 

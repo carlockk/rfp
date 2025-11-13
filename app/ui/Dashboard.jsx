@@ -7,6 +7,7 @@ import Evaluation from '@/models/Evaluation';
 import User from '@/models/User';
 import Notification from '@/models/Notification';
 import { buildComputedChecklistAlerts } from '@/lib/notifications';
+import GlobalSearch from './GlobalSearch';
 
 const STATUS_KEYS = ['ok', 'observado', 'critico'];
 
@@ -55,6 +56,9 @@ function AdminDashboard({ metrics }) {
         <div className="page-header__titles">
           <p className="page-header__eyebrow">Panel de administración</p>
           <h1 className="page-header__title">Resumen general</h1>
+        </div>
+        <div className="page-header__actions">
+          <GlobalSearch />
         </div>
       </div>
 
