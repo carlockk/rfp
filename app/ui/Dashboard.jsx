@@ -279,7 +279,7 @@ export default async function Dashboard() {
 
     const recentEvaluations = await Evaluation.find({ technician: session.id })
       .sort({ completedAt: -1 })
-      .limit(6)
+      .limit(4)
       .populate('checklist', 'name')
       .populate('equipment', 'code type')
       .lean();

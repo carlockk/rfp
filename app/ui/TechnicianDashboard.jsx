@@ -16,7 +16,8 @@ const STATUS_COLORS = {
   critico: '#c62828'
 };
 
-const PAGE_SIZE = 6;
+const EQUIPMENT_PAGE_SIZE = 6;
+const MAX_RECENT_EVALUATIONS = 4;
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -46,9 +47,11 @@ export default function TechnicianDashboard({ data }) {
 
   const total = assignedEquipments.length;
   const pagedEquipments = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return assignedEquipments.slice(start, start + PAGE_SIZE);
+    const start = (page - 1) * EQUIPMENT_PAGE_SIZE;
+    return assignedEquipments.slice(start, start + EQUIPMENT_PAGE_SIZE);
   }, [assignedEquipments, page]);
+
+  const limitedEvaluations = recentEvaluations.slice(0, MAX_RECENT_EVALUATIONS);
 
   return (
     <div className="dashboard">
@@ -140,11 +143,11 @@ export default function TechnicianDashboard({ data }) {
                 </tbody>
               </table>
             </div>
-            {total > PAGE_SIZE ? (
+            {total > EQUIPMENT_PAGE_SIZE ? (
               <div style={{ marginTop: 12 }}>
                 <PaginationControls
                   page={page}
-                  pageSize={PAGE_SIZE}
+                  pageSize={EQUIPMENT_PAGE_SIZE}
                   total={total}
                   onPageChange={setPage}
                 />
@@ -180,6 +183,9 @@ export default function TechnicianDashboard({ data }) {
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Evaluaciones recientes</h3>
+        <p className="label" style={{ marginTop: 8, marginBottom: 16 }}>
+          Este listado muestra sólo tus últimos formularios enviados (máximo {MAX_RECENT_EVALUATIONS}). Para revisar todos los registros de un equipo en detalle puedes usar el botón “Ver anteriores” en la tabla de estado.
+        </p>
         <div className="table-wrapper">
           <table className="table">
             <thead>
@@ -193,7 +199,7 @@ export default function TechnicianDashboard({ data }) {
               </tr>
             </thead>
             <tbody>
-              {recentEvaluations.map((item) => (
+              {limitedEvaluations.map((item) => (
                 <tr key={item._id.toString()}>
                   <td>{formatDate(item.completedAt)}</td>
                   <td>{item.checklist?.name || item.templateName || '-'}</td>
