@@ -275,12 +275,17 @@ const buildAnswersFromEvaluation = (item, checklistQuestionMap) => {
   return answers;
 };
 
-export default function HistoryDashboard({ checklistOptions, technicianOptions, equipmentOptions }) {
+export default function HistoryDashboard({
+  checklistOptions,
+  technicianOptions,
+  equipmentOptions,
+  initialFilters = {}
+}) {
   const [filters, setFilters] = useState({
-    checklistId: '',
-    technicianId: '',
-    equipmentId: '',
-    status: ''
+    checklistId: initialFilters.checklistId || '',
+    technicianId: initialFilters.technicianId || '',
+    equipmentId: initialFilters.equipmentId || '',
+    status: initialFilters.status || ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

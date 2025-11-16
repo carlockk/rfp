@@ -20,6 +20,17 @@ import {
 } from '@/lib/templateMetrics';
 
 const VALID_STATUS = new Set(['ok', 'observado', 'critico']);
+const FALLBACK_FIELD_KEYS: Record<keyof TemplateNumericMetrics, string[]> = {
+  hourmeterCurrent: ['horometro_actual', 'hourmeter_actual', 'hourmeter', 'horometro'],
+  odometerCurrent: ['odometro_actual', 'odometro', 'odometer', 'kilometraje'],
+  fuelLevelBefore: ['combustible_anterior', 'fuel_level_before', 'nivel_combustible_previo'],
+  fuelLevelAfter: ['combustible_actual', 'fuel_level_after', 'nivel_combustible'],
+  fuelAddedLiters: ['combustible_cargado', 'litros_cargados', 'fuel_added', 'fuelAddedLiters'],
+  energyAddedKwh: ['energia_cargada', 'kwh_cargados', 'energy_added', 'energyAddedKwh'],
+  adblueAddedLiters: ['adblue_cargado', 'adblue_litros', 'adblueAddedLiters'],
+  batteryLevelBefore: ['bateria_anterior', 'battery_level_before'],
+  batteryLevelAfter: ['bateria_actual', 'battery_level_after']
+};
 const MAX_TEMPLATE_ATTACHMENT_SIZE = 1024 * 1024 * 3;
 const MAX_EVIDENCE_ATTACHMENTS = 3;
 
@@ -384,6 +395,43 @@ export async function POST(req: NextRequest) {
   Object.entries(templateMetrics).forEach(([field, value]) => {
     if (value != null) {
       evaluationData[field] = value;
+    }
+  });
+
+  const responseMap = responses.reduce<Record<string, unknown>>((acc, item) => {
+    acc[item.itemKey] = item.value;
+    return acc;
+  }, {});
+
+  const readFromObject = (source: Record<string, unknown> | undefined, keys: string[]) => {
+    if (!source) return null;
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        const parsed = parseNumericValue(source[key]);
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  };
+
+  const readFromResponses = (keys: string[]) => {
+    for (const key of keys) {
+      if (!Object.prototype.hasOwnProperty.call(responseMap, key)) continue;
+      const parsed = parseNumericValue(responseMap[key]);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  };
+
+  (Object.keys(FALLBACK_FIELD_KEYS) as Array<keyof TemplateNumericMetrics>).forEach((field) => {
+    if (evaluationData[field as string] != null) return;
+    const keys = FALLBACK_FIELD_KEYS[field];
+    const fallbackValue =
+      readFromObject(formData || {}, keys) ??
+      readFromObject(templateValues, keys) ??
+      readFromResponses(keys);
+    if (fallbackValue != null) {
+      evaluationData[field as string] = fallbackValue;
     }
   });
 

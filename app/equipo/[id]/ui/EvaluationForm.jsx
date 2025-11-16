@@ -29,7 +29,8 @@ const buildInitialAnswers = (nodes = []) => {
         if (item.inputType === 'select' && item.allowMultiple) {
           answers[item.key] = [];
         } else if (item.inputType === 'checkbox') {
-          answers[item.key] = false;
+          // Checkbox: lista de opciones seleccionadas
+          answers[item.key] = [];
         } else {
           answers[item.key] = '';
         }
@@ -97,6 +98,12 @@ export default function EvaluationForm({
   const [answers, setAnswers] = useState({});
   const [hourmeter, setHourmeter] = useState('');
   const [odometer, setOdometer] = useState('');
+  const [fuelAdded, setFuelAdded] = useState('');
+  const [energyAdded, setEnergyAdded] = useState('');
+  const [adblueAdded, setAdblueAdded] = useState('');
+  const [fuelEnabled, setFuelEnabled] = useState(false);
+  const [energyEnabled, setEnergyEnabled] = useState(false);
+  const [adblueEnabled, setAdblueEnabled] = useState(false);
   const [shift, setShift] = useState('dia');
   const [supervisor, setSupervisor] = useState('');
   const [info, setInfo] = useState('');
@@ -131,7 +138,6 @@ export default function EvaluationForm({
 
   const templateRequiresChecklist = matchedTemplate?.isChecklistMandatory === true;
 
-
   const [templateState, setTemplateState] = useState(() => ({
     values: {},
     attachments: [],
@@ -147,7 +153,6 @@ export default function EvaluationForm({
 
   const canSkipChecklist = !templateRequiresChecklist && checklistSkipAllowed;
 
-
   useEffect(() => {
     if (!checklists.length) {
       setChecklistId('');
@@ -158,7 +163,9 @@ export default function EvaluationForm({
     const defaultId = mandatory ? mandatory.id : checklists[0].id;
     setChecklistId(defaultId);
 
-    const shouldForceChecklist = Boolean(mandatory || templateRequiresChecklist || !canSkipChecklist);
+    const shouldForceChecklist = Boolean(
+      mandatory || templateRequiresChecklist || !canSkipChecklist
+    );
     if (shouldForceChecklist) {
       setSkipChecklist(false);
       return;
@@ -200,6 +207,12 @@ export default function EvaluationForm({
     startRef.current = new Date();
     setHourmeter('');
     setOdometer('');
+    setFuelAdded('');
+    setEnergyAdded('');
+    setAdblueAdded('');
+    setFuelEnabled(false);
+    setEnergyEnabled(false);
+    setAdblueEnabled(false);
   }, [checklistId, equipment.id, skipChecklist, matchedTemplate?.id]);
 
   useEffect(() => {
@@ -219,17 +232,104 @@ export default function EvaluationForm({
     updateAnswer(node.key, value);
   };
 
-  const renderNode = (node) => {
+  const toggleFuel = (enabled) => {
+    setFuelEnabled(enabled);
+    if (!enabled) setFuelAdded('');
+  };
+
+  const toggleEnergy = (enabled) => {
+    setEnergyEnabled(enabled);
+    if (!enabled) setEnergyAdded('');
+  };
+
+  const toggleAdblue = (enabled) => {
+    setAdblueEnabled(enabled);
+    if (!enabled) setAdblueAdded('');
+  };
+
+  const handleEvidenceUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    let remaining = MAX_EVIDENCE_FILES - evidencePhotos.length;
+    if (remaining <= 0) {
+      setEvidenceError(`Puedes adjuntar hasta ${MAX_EVIDENCE_FILES} fotos.`);
+      event.target.value = '';
+      return;
+    }
+
+    for (const file of files) {
+      if (remaining <= 0) break;
+      if (file.size > MAX_EVIDENCE_FILE_SIZE) {
+        setEvidenceError(`El archivo ${file.name} supera los 3MB permitidos.`);
+        continue;
+      }
+      setEvidenceUploadingCount((prev) => prev + 1);
+      try {
+        const dataUrl = await readFileAsDataURL(file);
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileBase64: dataUrl })
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const payload = await response.json();
+        if (!payload?.url) {
+          throw new Error('Respuesta invalida del servidor');
+        }
+        setEvidencePhotos((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            size: file.size,
+            type: file.type || 'image/jpeg',
+            url: payload.url
+          }
+        ]);
+        remaining -= 1;
+        setEvidenceError('');
+      } catch (err) {
+        console.error('No se pudo subir la foto', err);
+        setEvidenceError(err.message || `No se pudo subir ${file.name}`);
+      } finally {
+        setEvidenceUploadingCount((prev) => Math.max(0, prev - 1));
+      }
+    }
+
+    event.target.value = '';
+  };
+
+  const handleEvidenceRemove = (index) => {
+    setEvidencePhotos((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const renderNode = (node, depth = 0) => {
     if (!node) return null;
+    const childNodes = Array.isArray(node.children) ? node.children : [];
+
     if (node.inputType === 'section') {
       return (
-        <div key={node.key} className="evaluation-section">
+        <div
+          key={node.key}
+          className="evaluation-section"
+          style={{
+            marginTop: depth > 0 ? 16 : 0,
+            marginLeft: depth > 0 ? `${depth * 15}px` : 0
+          }}
+        >
           <h3 className="evaluation-section__title">{node.title}</h3>
           {node.description ? (
             <p className="evaluation-section__description">{node.description}</p>
           ) : null}
           <div className="evaluation-section__content">
-            {(node.children || []).map(renderNode)}
+            {childNodes.length ? (
+              childNodes.map((child) => renderNode(child, depth + 1))
+            ) : (
+              <p className="label" style={{ color: 'var(--muted)' }}>
+                Sin items configurados.
+              </p>
+            )}
           </div>
         </div>
       );
@@ -237,187 +337,197 @@ export default function EvaluationForm({
 
     const fieldValue = answers[node.key];
     const nodeOptions = DEFAULT_MULTI_OPTIONS(node.options);
-    const nodeLabel = node.title || node.label;
+
+    // Prefijo e indentación visual por nivel
+    const prefix = depth > 0 ? `${'-'.repeat(depth)} ` : '';
+    const nodeLabel = `${prefix}${node.title || node.label}`;
+    const inputId = `node-${node.key}`;
+
+    // Indentación base del item
+    const itemIndentStyle = depth > 0 ? { marginLeft: `${depth * 20}px` } : {};
+
+    const hasChildren = childNodes.length > 0;
+    // Cuando es checkbox con hijos, usamos un layout vertical en vez de la grilla por columnas
+    const isCheckboxTree = node.inputType === 'checkbox' && hasChildren;
+
+    const wrapperStyle = {
+      ...itemIndentStyle,
+      ...(isCheckboxTree
+        ? {
+            display: 'block',
+            paddingLeft: depth > 0 ? depth * 10 : 0
+          }
+        : {})
+    };
+
+    let control = null;
 
     if (node.inputType === 'radio') {
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label">{nodeLabel}{node.required ? ' *' : ''}</label>
-          <div className="input-stack">
-            {nodeOptions.map((option) => (
+      control = (
+        <div className="checklist-options">
+          {nodeOptions.map((option) => (
+            <label key={option.key} className="input-choice">
+              <input
+                type="radio"
+                name={node.key}
+                value={option.key}
+                checked={fieldValue === option.key}
+                onChange={(event) => updateAnswer(node.key, event.target.value)}
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      );
+    } else if (node.inputType === 'checkbox') {
+      const current = Array.isArray(fieldValue) ? fieldValue : [];
+      control = (
+        <div className="checklist-options">
+          {nodeOptions.map((option) => {
+            const checked = current.includes(option.key);
+            return (
               <label key={option.key} className="input-choice">
                 <input
-                  type="radio"
-                  name={node.key}
+                  type="checkbox"
                   value={option.key}
-                  checked={fieldValue === option.key}
-                  onChange={(event) => updateAnswer(node.key, event.target.value)}
+                  checked={checked}
+                  onChange={(event) => {
+                    const next = new Set(current);
+                    if (event.target.checked) {
+                      next.add(option.key);
+                    } else {
+                      next.delete(option.key);
+                    }
+                    handleMultiChange(node, Array.from(next));
+                  }}
                 />
                 {option.label}
               </label>
-            ))}
-          </div>
+            );
+          })}
         </div>
       );
-    }
-
-    if (node.inputType === 'checkbox') {
-      const current = Array.isArray(fieldValue) ? fieldValue : [];
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label">{nodeLabel}{node.required ? ' *' : ''}</label>
-          <div className="input-stack">
-            {nodeOptions.map((option) => {
-              const checked = current.includes(option.key);
-              return (
-                <label key={option.key} className="input-choice">
-                  <input
-                    type="checkbox"
-                    value={option.key}
-                    checked={checked}
-                    onChange={(event) => {
-                      const next = new Set(current);
-                      if (event.target.checked) {
-                        next.add(option.key);
-                      } else {
-                        next.delete(option.key);
-                      }
-                      handleMultiChange(node, Array.from(next));
-                    }}
-                  />
-                  {option.label}
-                </label>
-              );
-            })}
-          </div>
-        </div>
+    } else if (node.inputType === 'select' && node.allowMultiple) {
+      control = (
+        <select
+          multiple
+          id={inputId}
+          className="input"
+          value={Array.isArray(fieldValue) ? fieldValue : []}
+          onChange={(event) => {
+            const selected = Array.from(event.target.selectedOptions).map(
+              (option) => option.value
+            );
+            handleMultiChange(node, selected);
+          }}
+        >
+          {nodeOptions.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       );
-    }
-
-    if (node.inputType === 'select' && node.allowMultiple) {
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label" htmlFor={node.key}>
-            {nodeLabel}{node.required ? ' *' : ''}
-          </label>
-          <select
-            multiple
-            id={node.key}
-            className="input"
-            value={Array.isArray(fieldValue) ? fieldValue : []}
-            onChange={(event) => {
-              const selected = Array.from(event.target.selectedOptions).map((option) => option.value);
-              handleMultiChange(node, selected);
-            }}
-          >
-            {nodeOptions.map((option) => (
-              <option key={option.key} value={option.key}>{option.label}</option>
-            ))}
-          </select>
-        </div>
+    } else if (node.inputType === 'select') {
+      control = (
+        <select
+          id={inputId}
+          className="input"
+          value={fieldValue ?? ''}
+          onChange={(event) => updateAnswer(node.key, event.target.value)}
+        >
+          <option value="">Selecciona...</option>
+          {nodeOptions.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       );
-    }
-
-    if (node.inputType === 'select') {
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label" htmlFor={node.key}>
-            {nodeLabel}{node.required ? ' *' : ''}
-          </label>
-          <select
-            id={node.key}
-            className="input"
-            value={fieldValue ?? ''}
-            onChange={(event) => updateAnswer(node.key, event.target.value)}
-          >
-            <option value="">Selecciona...</option>
-            {nodeOptions.map((option) => (
-              <option key={option.key} value={option.key}>{option.label}</option>
-            ))}
-          </select>
-        </div>
+    } else if (node.inputType === 'textarea') {
+      control = (
+        <textarea
+          id={inputId}
+          className="input"
+          rows={3}
+          value={fieldValue ?? ''}
+          onChange={(event) => updateAnswer(node.key, event.target.value)}
+        />
       );
-    }
-
-    if (node.inputType === 'textarea') {
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label" htmlFor={node.key}>
-            {nodeLabel}{node.required ? ' *' : ''}
-          </label>
-          <textarea
-            id={node.key}
-            className="input"
-            rows={3}
-            value={fieldValue ?? ''}
-            onChange={(event) => updateAnswer(node.key, event.target.value)}
-          />
-        </div>
-      );
-    }
-
-    if (node.inputType === 'date') {
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label" htmlFor={node.key}>
-            {nodeLabel}{node.required ? ' *' : ''}
-          </label>
-          <input
-            id={node.key}
-            type="date"
-            className="input"
-            value={fieldValue ?? ''}
-            onChange={(event) => updateAnswer(node.key, event.target.value)}
-          />
-        </div>
-      );
-    }
-
-    if (node.inputType === 'time') {
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label" htmlFor={node.key}>
-            {nodeLabel}{node.required ? ' *' : ''}
-          </label>
-          <input
-            id={node.key}
-            type="time"
-            className="input"
-            value={fieldValue ?? ''}
-            onChange={(event) => updateAnswer(node.key, event.target.value)}
-          />
-        </div>
-      );
-    }
-
-    if (node.inputType === 'number') {
-      return (
-        <div key={node.key} className="form-field">
-          <label className="label" htmlFor={node.key}>
-            {nodeLabel}{node.required ? ' *' : ''}
-          </label>
-          <input
-            id={node.key}
-            type="number"
-            className="input"
-            value={fieldValue ?? ''}
-             onChange={(event) => updateAnswer(node.key, event.target.value)}
-          />
-        </div>
-      );
-    }
-
-    return (
-      <div key={node.key} className="form-field">
-        <label className="label" htmlFor={node.key}>
-          {nodeLabel}{node.required ? ' *' : ''}
-        </label>
+    } else if (node.inputType === 'date' || node.inputType === 'time') {
+      control = (
         <input
-          id={node.key}
+          id={inputId}
+          type={node.inputType}
           className="input"
           value={fieldValue ?? ''}
           onChange={(event) => updateAnswer(node.key, event.target.value)}
         />
+      );
+    } else if (node.inputType === 'number') {
+      control = (
+        <input
+          id={inputId}
+          type="number"
+          className="input"
+          value={fieldValue ?? ''}
+          onChange={(event) => updateAnswer(node.key, event.target.value)}
+        />
+      );
+    } else {
+      control = (
+        <input
+          id={inputId}
+          className="input"
+          value={fieldValue ?? ''}
+          onChange={(event) => updateAnswer(node.key, event.target.value)}
+        />
+      );
+    }
+
+    const promptContent =
+      node.inputType === 'select' ||
+      node.inputType === 'textarea' ||
+      node.inputType === 'text' ||
+      node.inputType === 'date' ||
+      node.inputType === 'time' ||
+      node.inputType === 'number'
+        ? (
+            <label className="label" htmlFor={inputId}>
+              {nodeLabel}
+              {node.required ? ' *' : ''}
+            </label>
+          )
+        : (
+            <span className="label">
+              {nodeLabel}
+              {node.required ? ' *' : ''}
+            </span>
+          );
+
+    return (
+      <div key={node.key} className="checklist-item" style={wrapperStyle}>
+        <div className="checklist-item__prompt">
+          {promptContent}
+          {node.description ? (
+            <p className="checklist-item__description">
+              {node.description}
+            </p>
+          ) : null}
+        </div>
+        <div className="checklist-item__controls">{control}</div>
+        {hasChildren ? (
+          <div
+            className="checklist-item__children"
+            style={
+              isCheckboxTree
+                ? { marginTop: 8, paddingLeft: 20 }
+                : { gridColumn: '1 / -1', paddingLeft: '10px' }
+            }
+          >
+            {childNodes.map((child) => renderNode(child, depth + 1))}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -463,7 +573,11 @@ export default function EvaluationForm({
 
     const missing = validateRequired();
     if (missing && missing.length) {
-      setError(`Completa los campos obligatorios: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '...' : ''}`);
+      setError(
+        `Completa los campos obligatorios: ${missing
+          .slice(0, 3)
+          .join(', ')}${missing.length > 3 ? '...' : ''}`
+      );
       setBusy(false);
       return;
     }
@@ -484,7 +598,11 @@ export default function EvaluationForm({
       const missingFields = templateState.missing.slice(0, 3).join(', ');
       setError(
         `Completa los campos requeridos del formulario operativo${
-          missingFields ? `: ${missingFields}${templateState.missing.length > 3 ? '...' : ''}` : ''
+          missingFields
+            ? `: ${missingFields}${
+                templateState.missing.length > 3 ? '...' : ''
+              }`
+            : ''
         }`
       );
       setBusy(false);
@@ -494,19 +612,13 @@ export default function EvaluationForm({
     const hourValue = hourmeter.trim() !== '' ? Number(hourmeter) : null;
     const odoValue = odometer.trim() !== '' ? Number(odometer) : null;
 
-    if (
-      hourValue !== null &&
-      (!Number.isFinite(hourValue) || hourValue < 0)
-    ) {
+    if (hourValue !== null && (!Number.isFinite(hourValue) || hourValue < 0)) {
       setError('Ingresa un valor válido para el horómetro.');
       setBusy(false);
       return;
     }
 
-    if (
-      odoValue !== null &&
-      (!Number.isFinite(odoValue) || odoValue < 0)
-    ) {
+    if (odoValue !== null && (!Number.isFinite(odoValue) || odoValue < 0)) {
       setError('Ingresa un valor válido para el odómetro.');
       setBusy(false);
       return;
@@ -525,18 +637,47 @@ export default function EvaluationForm({
       }
 
       responses.push({ itemKey: 'estado_general', value: status, note: '' });
-      responses.push({ itemKey: 'observaciones', value: observations, note: '' });
+      responses.push({
+        itemKey: 'observaciones',
+        value: observations,
+        note: ''
+      });
 
       if (hourValue !== null) {
-        responses.push({ itemKey: 'horometro_actual', value: hourValue, note: '' });
+        responses.push({
+          itemKey: 'horometro_actual',
+          value: hourValue,
+          note: ''
+        });
       }
       if (odoValue !== null) {
-        responses.push({ itemKey: 'odometro_actual', value: odoValue, note: '' });
+        responses.push({
+          itemKey: 'odometro_actual',
+          value: odoValue,
+          note: ''
+        });
       }
 
       if (variant === 'candelaria') {
         responses.push({ itemKey: 'turno', value: shift, note: '' });
         responses.push({ itemKey: 'supervisor', value: supervisor, note: '' });
+      }
+
+      const fuelValue =
+        fuelEnabled && fuelAdded.trim() !== '' ? Number(fuelAdded) : null;
+      const energyValue =
+        energyEnabled && energyAdded.trim() !== '' ? Number(energyAdded) : null;
+      const adblueValue =
+        adblueEnabled && adblueAdded.trim() !== '' ? Number(adblueAdded) : null;
+
+      if (fuelValue !== null && Number.isFinite(fuelValue)) {
+        responses.push({ itemKey: 'combustible_cargado', value: fuelValue, note: '' });
+      }
+      if (energyValue !== null && Number.isFinite(energyValue)) {
+        responses.push({ itemKey: 'energia_cargada', value: energyValue, note: '' });
+      }
+      if (adblueValue !== null && Number.isFinite(adblueValue)) {
+        responses.push({ itemKey: 'adblue_cargado', value: adblueValue, note: '' });
       }
 
       const formData = {
@@ -548,7 +689,10 @@ export default function EvaluationForm({
         variante: variant,
         equipo: equipment.code,
         horometro_actual: hourValue,
-        odometro_actual: odoValue
+        odometro_actual: odoValue,
+        combustible_cargado: fuelValue,
+        energia_cargada: energyValue,
+        adblue_cargado: adblueValue
       };
 
       if (variant === 'candelaria') {
@@ -564,7 +708,10 @@ export default function EvaluationForm({
 
       const finishedAt = new Date();
       const startedAt = startRef.current;
-      const durationSeconds = Math.max(0, Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000));
+      const durationSeconds = Math.max(
+        0,
+        Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000)
+      );
 
       const payload = {
         checklistId: !skipChecklist ? checklistId : undefined,
@@ -577,7 +724,7 @@ export default function EvaluationForm({
         durationSeconds,
         formData,
         completedAt: finishedAt.toISOString(),
-        checklistVersion: !skipChecklist ? (selectedChecklist?.version || 1) : 0,
+        checklistVersion: !skipChecklist ? selectedChecklist?.version || 1 : 0,
         template: matchedTemplate
           ? {
               id: matchedTemplate.id,
@@ -596,7 +743,9 @@ export default function EvaluationForm({
 
       const result = await submitEvaluation(payload);
       if (result?.queued) {
-        setInfo('Sin conexión: evaluación encolada y se enviará al reconectar.');
+        setInfo(
+          'Sin conexión: evaluación encolada y se enviará al reconectar.'
+        );
       } else {
         setInfo('Evaluación registrada correctamente.');
       }
@@ -605,11 +754,19 @@ export default function EvaluationForm({
       setStatus('ok');
       setHourmeter('');
       setOdometer('');
+      setFuelAdded('');
+      setEnergyAdded('');
+      setAdblueAdded('');
+      setFuelEnabled(false);
+      setEnergyEnabled(false);
+      setAdblueEnabled(false);
       if (variant === 'candelaria') {
         setSupervisor('');
         setShift('dia');
       }
-      const initialAnswers = buildInitialAnswers(selectedChecklist?.nodes || []);
+      const initialAnswers = buildInitialAnswers(
+        selectedChecklist?.nodes || []
+      );
       setAnswers(initialAnswers);
       setTemplateState({
         values: {},
@@ -631,13 +788,10 @@ export default function EvaluationForm({
     }
   };
 
-    return (
+  return (
     <form className="form-grid" onSubmit={handleSubmit} style={{ gap: 16 }}>
       {matchedTemplate ? (
-        <TemplateForm
-          template={matchedTemplate}
-          onChange={setTemplateState}
-        />
+        <TemplateForm template={matchedTemplate} onChange={setTemplateState} />
       ) : null}
 
       {canSkipChecklist ? (
@@ -653,14 +807,17 @@ export default function EvaluationForm({
             Omitir checklist en esta evaluación
           </label>
           <span className="input-hint">
-            Puedes registrar solo el formulario operativo si no hay checklist obligatorio.
+            Puedes registrar solo el formulario operativo si no hay checklist
+            obligatorio.
           </span>
         </div>
       ) : null}
 
       {!skipChecklist ? (
         <div className="form-field">
-          <label className="label" htmlFor="checklist">Checklist</label>
+          <label className="label" htmlFor="checklist">
+            Checklist
+          </label>
           <select
             id="checklist"
             className="input"
@@ -670,13 +827,22 @@ export default function EvaluationForm({
           >
             <option value="">Selecciona...</option>
             {checklistOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
           </select>
         </div>
       ) : (
         <div className="form-field form-field--full" style={{ marginBottom: 0 }}>
-          <div className="alert" style={{ background: 'rgba(59,130,246,0.08)', padding: 12, borderRadius: 8 }}>
+          <div
+            className="alert"
+            style={{
+              background: 'rgba(59,130,246,0.08)',
+              padding: 12,
+              borderRadius: 8
+            }}
+          >
             Checklist omitido. Solo se registrará el formulario operativo.
           </div>
         </div>
@@ -691,7 +857,9 @@ export default function EvaluationForm({
       {!matchedTemplate ? (
         <>
           <div className="form-field">
-            <label className="label" htmlFor="hourmeter">Horómetro / horas actuales</label>
+            <label className="label" htmlFor="hourmeter">
+              Horómetro / horas actuales
+            </label>
             <input
               id="hourmeter"
               className="input"
@@ -703,11 +871,15 @@ export default function EvaluationForm({
               placeholder="Ej: 1234.5"
               required={odometer.trim() === ''}
             />
-            <span className="input-hint">Ingresa las horas acumuladas. Si no aplica, completa el odómetro.</span>
+            <span className="input-hint">
+              Ingresa las horas acumuladas. Si no aplica, completa el odómetro.
+            </span>
           </div>
 
           <div className="form-field">
-            <label className="label" htmlFor="odometer">Odómetro / kilometraje actual</label>
+            <label className="label" htmlFor="odometer">
+              Odómetro / kilometraje actual
+            </label>
             <input
               id="odometer"
               className="input"
@@ -719,13 +891,98 @@ export default function EvaluationForm({
               placeholder="Ej: 48000"
               required={hourmeter.trim() === ''}
             />
-            <span className="input-hint">Si no registra kilometraje, completa el horómetro.</span>
+            <span className="input-hint">
+              Si no registra kilometraje, completa el horómetro.
+            </span>
+          </div>
+
+          <div className="form-field form-field--full">
+            <label className="label" style={{ marginBottom: 4 }}>Consumos registrados (opcional)</label>
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="label" htmlFor="fuel-added">Combustible (L)</label>
+                  <label className="input-choice" style={{ fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={fuelEnabled}
+                      onChange={(event) => toggleFuel(event.target.checked)}
+                    />
+                    ¿Registrar?
+                  </label>
+                </div>
+                <input
+                  id="fuel-added"
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={fuelAdded}
+                  onChange={(event) => setFuelAdded(event.target.value)}
+                  placeholder="Litros cargados"
+                  disabled={!fuelEnabled}
+                />
+              </div>
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="label" htmlFor="energy-added">Energía (kWh)</label>
+                  <label className="input-choice" style={{ fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={energyEnabled}
+                      onChange={(event) => toggleEnergy(event.target.checked)}
+                    />
+                    ¿Registrar?
+                  </label>
+                </div>
+                <input
+                  id="energy-added"
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={energyAdded}
+                  onChange={(event) => setEnergyAdded(event.target.value)}
+                  placeholder="kWh cargados"
+                  disabled={!energyEnabled}
+                />
+              </div>
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="label" htmlFor="adblue-added">AdBlue (L)</label>
+                  <label className="input-choice" style={{ fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={adblueEnabled}
+                      onChange={(event) => toggleAdblue(event.target.checked)}
+                    />
+                    ¿Registrar?
+                  </label>
+                </div>
+                <input
+                  id="adblue-added"
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={adblueAdded}
+                  onChange={(event) => setAdblueAdded(event.target.value)}
+                  placeholder="Litros AdBlue"
+                  disabled={!adblueEnabled}
+                />
+              </div>
+            </div>
+            <span className="input-hint">
+              Marca “¿Registrar?” para los consumos que apliquen al equipo.
+            </span>
           </div>
         </>
       ) : null}
 
       <div className="form-field">
-        <label className="label" htmlFor="status">Estado general</label>
+        <label className="label" htmlFor="status">
+          Estado general
+        </label>
         <select
           id="status"
           className="input"
@@ -733,7 +990,9 @@ export default function EvaluationForm({
           onChange={(event) => setStatus(event.target.value)}
         >
           {STATUS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
           ))}
         </select>
       </div>
@@ -741,7 +1000,9 @@ export default function EvaluationForm({
       {variant === 'candelaria' ? (
         <>
           <div className="form-field">
-            <label className="label" htmlFor="shift">Turno</label>
+            <label className="label" htmlFor="shift">
+              Turno
+            </label>
             <select
               id="shift"
               className="input"
@@ -753,7 +1014,9 @@ export default function EvaluationForm({
             </select>
           </div>
           <div className="form-field">
-            <label className="label" htmlFor="supervisor">Supervisor</label>
+            <label className="label" htmlFor="supervisor">
+              Supervisor
+            </label>
             <input
               id="supervisor"
               className="input"
@@ -766,7 +1029,9 @@ export default function EvaluationForm({
       ) : null}
 
       <div className="form-field" style={{ gridColumn: '1 / -1' }}>
-        <label className="label" htmlFor="observations">Observaciones adicionales</label>
+        <label className="label" htmlFor="observations">
+          Observaciones adicionales
+        </label>
         <textarea
           id="observations"
           className="input"
@@ -778,7 +1043,9 @@ export default function EvaluationForm({
       </div>
 
       <div className="form-field" style={{ gridColumn: '1 / -1' }}>
-        <label className="label" htmlFor="evidence-photo">Foto de respaldo (opcional)</label>
+        <label className="label" htmlFor="evidence-photo">
+          Foto de respaldo (opcional)
+        </label>
         <input
           id="evidence-photo"
           type="file"
@@ -786,10 +1053,17 @@ export default function EvaluationForm({
           onChange={handleEvidenceUpload}
           disabled={evidenceUploading || evidencePhotos.length >= MAX_EVIDENCE_FILES}
         />
-        <span className="input-hint">Puedes adjuntar hasta {MAX_EVIDENCE_FILES} fotos para documentar la condición del equipo.</span>
-        {evidenceError ? <div style={{ color: 'var(--danger)' }}>{evidenceError}</div> : null}
+        <span className="input-hint">
+          Puedes adjuntar hasta {MAX_EVIDENCE_FILES} fotos para documentar la
+          condición del equipo.
+        </span>
+        {evidenceError ? (
+          <div style={{ color: 'var(--danger)' }}>{evidenceError}</div>
+        ) : null}
         {evidenceUploading ? (
-          <div className="label" style={{ color: 'var(--muted)' }}>Subiendo foto...</div>
+          <div className="label" style={{ color: 'var(--muted)' }}>
+            Subiendo foto...
+          </div>
         ) : null}
         {evidencePhotos.length ? (
           <div className="evidence-thumbs">
@@ -797,13 +1071,22 @@ export default function EvaluationForm({
               const src = photo.url || photo.dataUrl;
               if (!src) return null;
               return (
-                <div key={`${photo.name}-${index}`} className="evidence-thumb">
+                <div
+                  key={`${photo.name}-${index}`}
+                  className="evidence-thumb"
+                >
                   <button
                     type="button"
                     className="evidence-thumb__button"
-                    onClick={() => window.open(src, '_blank', 'noopener')}
+                    onClick={() =>
+                      window.open(src, '_blank', 'noopener')
+                    }
                   >
-                    <img src={src} alt={photo.name} className="evidence-thumb__image" />
+                    <img
+                      src={src}
+                      alt={photo.name}
+                      className="evidence-thumb__image"
+                    />
                   </button>
                   <button
                     type="button"
@@ -819,11 +1102,17 @@ export default function EvaluationForm({
         ) : null}
       </div>
 
-      {error ? <div style={{ color: 'var(--danger)' }}>{error}</div> : null}
+      {error ? (
+        <div style={{ color: 'var(--danger)' }}>{error}</div>
+      ) : null}
       {info ? <div style={{ color: 'var(--accent)' }}>{info}</div> : null}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <button className="btn primary" type="submit" disabled={busy || templateState.uploading}>
+        <button
+          className="btn primary"
+          type="submit"
+          disabled={busy || templateState.uploading}
+        >
           {busy ? 'Enviando...' : 'Enviar evaluación'}
         </button>
         <span className="label" style={{ alignSelf: 'center' }}>
@@ -836,60 +1125,3 @@ export default function EvaluationForm({
     </form>
   );
 }
-
-  const handleEvidenceUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
-    let remaining = MAX_EVIDENCE_FILES - evidencePhotos.length;
-    if (remaining <= 0) {
-      setEvidenceError(`Puedes adjuntar hasta ${MAX_EVIDENCE_FILES} fotos.`);
-      event.target.value = '';
-      return;
-    }
-
-    for (const file of files) {
-      if (remaining <= 0) break;
-      if (file.size > MAX_EVIDENCE_FILE_SIZE) {
-        setEvidenceError(`El archivo ${file.name} supera los 3MB permitidos.`);
-        continue;
-      }
-      setEvidenceUploadingCount((prev) => prev + 1);
-      try {
-        const dataUrl = await readFileAsDataURL(file);
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileBase64: dataUrl })
-        });
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
-        const payload = await response.json();
-        if (!payload?.url) {
-          throw new Error('Respuesta inválida del servidor');
-        }
-        setEvidencePhotos((prev) => [
-          ...prev,
-          {
-            name: file.name,
-            size: file.size,
-            type: file.type || 'image/jpeg',
-            url: payload.url
-          }
-        ]);
-        remaining -= 1;
-        setEvidenceError('');
-      } catch (err) {
-        console.error('No se pudo subir la foto', err);
-        setEvidenceError(err.message || `No se pudo subir ${file.name}`);
-      } finally {
-        setEvidenceUploadingCount((prev) => Math.max(0, prev - 1));
-      }
-    }
-
-    event.target.value = '';
-  };
-
-  const handleEvidenceRemove = (index) => {
-    setEvidencePhotos((prev) => prev.filter((_, idx) => idx !== index));
-  };

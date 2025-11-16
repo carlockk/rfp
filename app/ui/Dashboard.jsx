@@ -368,52 +368,7 @@ function TechnicianDashboard({ data }) {
         </div>
       </div>
 
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Últimas evaluaciones</h3>
-        <div className="table-wrapper">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Checklist</th>
-                <th>Equipo</th>
-                <th>Estado</th>
-                <th>Duración</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentEvaluations.map((item) => (
-                <tr key={item._id.toString()}>
-                  <td>{formatDate(item.completedAt)}</td>
-                  <td>{item.checklist?.name || '-'}</td>
-                  <td>{item.equipment?.code || '-'}</td>
-                  <td>
-                    <span
-                      style={{
-                        background: `${(STATUS_COLORS[item.status] || '#607d8b')}22`,
-                        color: STATUS_COLORS[item.status] || '#607d8b',
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        fontSize: 12
-                      }}
-                    >
-                      {STATUS_LABELS[item.status] || item.status}
-                    </span>
-                  </td>
-                  <td>{formatDuration(item.durationSeconds)}</td>
-                </tr>
-              ))}
-              {!recentEvaluations.length ? (
-                <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
-                    No has enviado evaluaciones recientemente.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      
     </div>
   );
 }

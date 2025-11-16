@@ -6,7 +6,7 @@ import Equipment from '@/models/Equipment';
 import User from '@/models/User';
 import HistoryDashboard from './ui/HistoryDashboard';
 
-export default async function Page() {
+export default async function Page({ searchParams }) {
   const ses = await requireRole(['admin', 'superadmin']);
   if (!ses) redirect('/login');
 
@@ -23,6 +23,11 @@ export default async function Page() {
       .sort({ code: 1 })
       .lean()
   ]);
+
+  const initialEquipmentId =
+    typeof searchParams?.equipmentId === 'string' ? searchParams.equipmentId : '';
+  const initialChecklistId =
+    typeof searchParams?.checklistId === 'string' ? searchParams.checklistId : '';
 
   return (
     <HistoryDashboard
@@ -42,6 +47,10 @@ export default async function Page() {
         code: eq.code,
         type: eq.type || ''
       }))}
+      initialFilters={{
+        equipmentId: initialEquipmentId,
+        checklistId: initialChecklistId
+      }}
     />
   );
 }
