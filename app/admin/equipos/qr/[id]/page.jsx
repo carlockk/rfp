@@ -1,13 +1,18 @@
+import { redirect } from 'next/navigation';
 import BackButton from '@/app/ui/BackButton';
 import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
 import QRCode from 'qrcode';
 import mongoose from 'mongoose';
 import { headers } from 'next/headers';
+import { requireRole } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Page({ params }) {
+  const ses = await requireRole(['admin', 'superadmin']);
+  if (!ses) redirect('/login');
+
   await dbConnect();
 
   const { id } = params || {};

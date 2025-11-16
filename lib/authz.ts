@@ -6,7 +6,10 @@ import Role from '@/models/Role.js';
 import Permission from '@/models/Permission.js';
 import RolePermission from '@/models/RolePermission.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const { JWT_SECRET } = process.env;
+if (!JWT_SECRET) {
+  throw new Error('Missing JWT_SECRET in env');
+}
 
 type SessionPayload = {
   id: string;

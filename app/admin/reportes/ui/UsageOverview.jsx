@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import SlidingPanel from '@/app/ui/SlidingPanel';
+import { useMemo } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -36,7 +35,6 @@ export default function UsageOverview({
   totalHourmeter = 0,
   hoursRatio = null
 }) {
-  const [open, setOpen] = useState(false);
   const hasTrend = monthlyTrend && monthlyTrend.length > 0;
 
   // ─────────────────────────────────────────────
@@ -82,15 +80,6 @@ export default function UsageOverview({
             Resumen de uso mensual ({monthLabel || 'sin periodo'})
           </p>
         </div>
-        {hasTrend ? (
-          <button
-            className="btn secondary"
-            type="button"
-            onClick={() => setOpen(true)}
-          >
-            Ver gráfico
-          </button>
-        ) : null}
       </div>
 
       {/* KPIs */}
@@ -290,13 +279,10 @@ export default function UsageOverview({
         </div>
       ) : null}
 
-      {/* PANEL LATERAL: TENDENCIA MENSUAL (línea de horas) */}
+      {/* TENDENCIA MENSUAL (línea de horas) */}
       {hasTrend ? (
-        <SlidingPanel
-          open={open}
-          title="Tendencia de uso (últimos 6 meses)"
-          onClose={() => setOpen(false)}
-        >
+        <div className="card" style={{ marginTop: 24, padding: 16 }}>
+          <h4 style={{ marginTop: 0, marginBottom: 8 }}>Tendencia de uso (últimos 6 meses)</h4>
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer>
               <LineChart
@@ -322,10 +308,9 @@ export default function UsageOverview({
             </ResponsiveContainer>
           </div>
           <p className="label" style={{ marginTop: 12 }}>
-            Cada punto muestra el total mensual de horas capturado desde los
-            formularios enviados por los técnicos.
+            Cada punto muestra el total mensual de horas capturado desde los formularios enviados por los técnicos.
           </p>
-        </SlidingPanel>
+        </div>
       ) : null}
     </div>
   );

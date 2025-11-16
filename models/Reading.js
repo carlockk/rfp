@@ -14,4 +14,7 @@ const ReadingSchema = new mongoose.Schema({
   photoUrl: String
 }, { timestamps: true });
 
+ReadingSchema.index({ equipmentId: 1, createdAt: -1 });
+ReadingSchema.index({ userId: 1, createdAt: -1 });
+
 export default mongoose.models.Reading || mongoose.model('Reading', ReadingSchema);

@@ -1,8 +1,13 @@
 
+import { NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/db';
 import Reading from '@/models/Reading';
+import { requirePermission } from '@/lib/authz';
 
-export async function GET(){
+export async function GET(req){
+  const auth = await requirePermission(req, 'ver_reporte');
+  if (auth instanceof NextResponse) return auth;
+
   await dbConnect();
   const last30 = new Date(Date.now() - 1000*60*60*24*30);
   const readings = await Reading.find({ createdAt: { $gte: last30 }}).lean();

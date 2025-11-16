@@ -36,4 +36,7 @@ const EquipmentSchema = new mongoose.Schema({
   deletedAt: { type: Date, default: null }
 }, { timestamps: true });
 
+EquipmentSchema.index({ assignedTo: 1, isActive: 1 });
+EquipmentSchema.index({ 'operators.user': 1 });
+
 export default mongoose.models.Equipment || mongoose.model('Equipment', EquipmentSchema);

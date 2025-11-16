@@ -2,7 +2,7 @@
 import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
-import { requireRole } from '@/lib/auth';
+import { getSession, requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { sanitizeEquipmentPayload } from '@/lib/equipmentPayload';
 
@@ -29,12 +29,51 @@ const normalizeOperators = (rawOperators = []) => {
 };
 
 export async function GET(){
+  const session = await getSession();
+  if (!session?.id) {
+    return new Response('No autenticado', { status: 401 });
+  }
+
   await dbConnect();
-  const items = await Equipment.find({ isActive: true })
-    .sort({createdAt:-1})
-    .populate('operators.user','name email role techProfile')
-    .populate('documents.uploadedBy','name email')
-    .lean();
+
+  const baseQuery = { isActive: true };
+  let query = baseQuery;
+  let projection = null;
+
+  if (session.role === 'admin' || session.role === 'superadmin') {
+    // Admins ven todos los equipos y sus documentos.
+    query = baseQuery;
+  } else if (session.role === 'tecnico') {
+    const userId = mongoose.Types.ObjectId.isValid(session.id)
+      ? new mongoose.Types.ObjectId(session.id)
+      : null;
+    if (!userId) {
+      return new Response('Sesion invalida', { status: 400 });
+    }
+    query = {
+      ...baseQuery,
+      $or: [
+        { assignedTo: userId },
+        { operators: { $elemMatch: { user: userId } } }
+      ]
+    };
+    projection = 'code type brand model plate fuel adblue notes hourmeterBase odometerBase assignedTo assignedAt operators createdAt updatedAt';
+  } else {
+    return new Response('No autorizado', { status: 403 });
+  }
+
+  const findQuery = Equipment.find(query)
+    .sort({ createdAt: -1 });
+
+  if (projection) {
+    findQuery.select(projection);
+  } else {
+    findQuery
+      .populate('operators.user','name email role techProfile')
+      .populate('documents.uploadedBy','name email');
+  }
+
+  const items = await findQuery.lean();
   return Response.json(items);
 }
 

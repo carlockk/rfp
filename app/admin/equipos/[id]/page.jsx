@@ -3,10 +3,14 @@ import BackButton from '@/app/ui/BackButton';
 import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
 import mongoose from 'mongoose';
+import { requireRole } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Page({ params }) {
+  const ses = await requireRole(['admin', 'superadmin']);
+  if (!ses) redirect('/login');
+
   await dbConnect();
 
   const { id } = params || {};

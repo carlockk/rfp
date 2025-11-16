@@ -59,6 +59,10 @@ export default async function Page({ params }) {
       : operatorUserIds.includes(session.id) ||
         (equipmentDoc.assignedTo && equipmentDoc.assignedTo.toString() === session.id);
 
+  if (session.role === 'tecnico' && !assignedToUser) {
+    redirect('/equipo/scan');
+  }
+
   let assignedEquipments = [];
   if (session.role === 'tecnico' && session.id) {
     const technicianId = mongoose.Types.ObjectId.isValid(session.id)

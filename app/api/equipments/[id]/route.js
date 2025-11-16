@@ -35,6 +35,9 @@ const populateEquipment = (query) =>
     .lean();
 
 export async function GET(_req, { params }) {
+  const ses = await requireRole(['admin', 'superadmin']);
+  if (!ses) return new Response('Forbidden', { status: 403 });
+
   await dbConnect();
   const item = await populateEquipment(
     Equipment.findOne({ _id: params.id })

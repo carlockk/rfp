@@ -129,6 +129,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     (equipment.assignedTo &&
       equipment.assignedTo.toString() === String(session.id));
 
+  if (session.role === 'tecnico' && !assignedToCurrent) {
+    return NextResponse.json({ error: 'Equipo no asignado a tu usuario' }, { status: 403 });
+  }
+
   return NextResponse.json({
     equipment: {
       id: equipment._id.toString(),

@@ -12,31 +12,39 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [now, setNow] = useState(new Date());
+  const [now, setNow] = useState(null);
 
   // Tema
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem('theme') : null;
     const target = stored === 'dark' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', target);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', target);
+    }
   }, []);
 
   // Reloj (se actualiza cada 30 segundos)
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30 * 1000);
-    return () => clearInterval(id);
+    // Sincroniza el reloj sólo en el cliente para evitar desajustes de SSR.
+    setNow(new Date());
+    const id = window.setInterval(() => setNow(new Date()), 30 * 1000);
+    return () => window.clearInterval(id);
   }, []);
 
-  const dateStr = now.toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
+  const dateStr = now
+    ? now.toLocaleDateString('es-CL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      })
+    : '--/--/----';
 
-  const timeStr = now.toLocaleTimeString('es-CL', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  const timeStr = now
+    ? now.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : '--:--';
 
   async function onSubmit(event) {
     event.preventDefault();
