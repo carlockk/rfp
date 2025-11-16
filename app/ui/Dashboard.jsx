@@ -8,6 +8,7 @@ import User from '@/models/User';
 import Notification from '@/models/Notification';
 import { buildComputedChecklistAlerts } from '@/lib/notifications';
 import GlobalSearch from './GlobalSearch';
+import TechnicianDashboard from './TechnicianDashboard';
 
 const STATUS_KEYS = ['ok', 'observado', 'critico'];
 
@@ -250,129 +251,6 @@ function AdminDashboard({ metrics }) {
   );
 }
 
-function TechnicianDashboard({ data }) {
-  const {
-    assignedEquipments,
-    equipmentStatuses,
-    recentEvaluations,
-    notifications
-  } = data;
-
-  return (
-    <div className="dashboard">
-      <div className="page-header">
-        <div className="page-header__titles">
-          <p className="page-header__eyebrow">Panel del técnico</p>
-          <h1 className="page-header__title">Mis equipos y formularios</h1>
-        </div>
-      </div>
-
-      <div className="row" style={{ marginBottom: 24 }}>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{assignedEquipments.length}</div>
-            <div className="label">Equipos asignados</div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{recentEvaluations.length}</div>
-            <div className="label">Evaluaciones recientes</div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{notifications.length}</div>
-            <div className="label">Alertas pendientes</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="row" style={{ marginBottom: 24 }}>
-        <div className="col" style={{ flexBasis: '60%' }}>
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>Estado de mis equipos</h3>
-            <div className="table-wrapper">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Equipo</th>
-                    <th>Tipo</th>
-                    <th>Último estado</th>
-                    <th>Fecha</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assignedEquipments.map((equipment) => {
-                    const status = equipmentStatuses[equipment.id];
-                    return (
-                      <tr key={equipment.id}>
-                        <td>{equipment.code}</td>
-                        <td>{equipment.type || '-'}</td>
-                        <td>
-                          {status ? (
-                            <span
-                              style={{
-                                background: `${(STATUS_COLORS[status.status] || '#607d8b')}22`,
-                                color: STATUS_COLORS[status.status] || '#607d8b',
-                                padding: '2px 8px',
-                                borderRadius: 999,
-                                fontSize: 12
-                              }}
-                            >
-                              {STATUS_LABELS[status.status] || status.status}
-                            </span>
-                          ) : (
-                            'Sin registro'
-                          )}
-                        </td>
-                        <td>{status ? formatDate(status.completedAt) : '-'}</td>
-                      </tr>
-                    );
-                  })}
-                  {!assignedEquipments.length ? (
-                    <tr>
-                      <td colSpan={4} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
-                        No tienes equipos asignados actualmente.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div className="col" style={{ flexBasis: '40%' }}>
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>Alertas</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {notifications.length ? (
-                notifications.map((alert) => (
-                  <div
-                    key={alert.id}
-                    style={{
-                      borderLeft: `4px solid ${alert.level === 'high' ? '#c62828' : alert.level === 'medium' ? '#f9a825' : '#1976d2'}`,
-                      background: 'var(--surface)',
-                      padding: '8px 12px'
-                    }}
-                  >
-                    <p style={{ margin: 0, fontWeight: 600 }}>{alert.message}</p>
-                    <span className="label">{formatDate(alert.createdAt)}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="label" style={{ color: 'var(--muted)' }}>No tienes alertas pendientes.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      
-    </div>
-  );
-}
-
 export default async function Dashboard() {
   await dbConnect();
   const session = await getSession();
@@ -452,11 +330,43 @@ export default async function Dashboard() {
       createdAt: item.createdAt
     }));
 
+    const historyEntries = equipmentIds.length
+      ? await Evaluation.find({
+          equipment: { $in: equipmentIds },
+          technician: session.id
+        })
+          .sort({ completedAt: -1, createdAt: -1 })
+          .limit(100)
+          .select('equipment status completedAt observations hourmeterCurrent odometerCurrent checklist templateName')
+          .populate('checklist', 'name')
+          .lean()
+      : [];
+
+    const equipmentHistory = historyEntries.reduce((acc, entry) => {
+      const key = entry.equipment?.toString();
+      if (!key) return acc;
+      const historyRecord = {
+        id: entry._id.toString(),
+        status: entry.status,
+        completedAt: entry.completedAt
+          ? entry.completedAt.toISOString?.() || entry.completedAt
+          : null,
+        observations: entry.observations || '',
+        checklistName: entry.checklist?.name || entry.templateName || '',
+        hourmeterCurrent: entry.hourmeterCurrent ?? null,
+        odometerCurrent: entry.odometerCurrent ?? null
+      };
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(historyRecord);
+      return acc;
+    }, {});
+
     return (
       <TechnicianDashboard
         data={{
           assignedEquipments,
           equipmentStatuses,
+          equipmentHistory,
           recentEvaluations,
           notifications: cleanNotifications
         }}
