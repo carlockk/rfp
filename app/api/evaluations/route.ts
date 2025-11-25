@@ -545,7 +545,7 @@ export async function POST(req: NextRequest) {
           'Observación:',
           observations
         ].join('\n');
-        await sendMail({ to: recipients.join(','), subject, text });
+        await sendMail({ to: recipients.join(','), subject, text, html: undefined });
       }
     } catch (err) {
       console.error('No se pudo enviar alerta de anomalía', err);
