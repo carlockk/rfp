@@ -1,8 +1,7 @@
-
 import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import Equipment from '@/models/Equipment';
-import { getSession, requireRole } from '@/lib/auth';
+import { getSessionFromRequest, requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { sanitizeEquipmentPayload } from '@/lib/equipmentPayload';
 
@@ -28,8 +27,9 @@ const normalizeOperators = (rawOperators = []) => {
   }));
 };
 
-export async function GET(){
-  const session = await getSession();
+export async function GET(req) {
+  const session = await getSessionFromRequest(req);
+
   if (!session?.id) {
     return new Response('No autenticado', { status: 401 });
   }
@@ -57,29 +57,29 @@ export async function GET(){
         { operators: { $elemMatch: { user: userId } } }
       ]
     };
-    projection = 'code type brand model plate fuel adblue notes hourmeterBase odometerBase assignedTo assignedAt operators createdAt updatedAt';
+    projection =
+      'code type brand model plate fuel adblue notes hourmeterBase odometerBase assignedTo assignedAt operators createdAt updatedAt';
   } else {
     return new Response('No autorizado', { status: 403 });
   }
 
-  const findQuery = Equipment.find(query)
-    .sort({ createdAt: -1 });
+  const findQuery = Equipment.find(query).sort({ createdAt: -1 });
 
   if (projection) {
     findQuery.select(projection);
   } else {
     findQuery
-      .populate('operators.user','name email role techProfile')
-      .populate('documents.uploadedBy','name email');
+      .populate('operators.user', 'name email role techProfile')
+      .populate('documents.uploadedBy', 'name email');
   }
 
   const items = await findQuery.lean();
   return Response.json(items);
 }
 
-export async function POST(req){
+export async function POST(req) {
   const ses = await requireRole('admin');
-  if (!ses) return new Response('Forbidden', { status:403 });
+  if (!ses) return new Response('Forbidden', { status: 403 });
 
   let data;
   try {
@@ -128,7 +128,7 @@ export async function POST(req){
   });
 
   const populated = await Equipment.findById(created._id)
-    .populate('operators.user','name email role techProfile')
+    .populate('operators.user', 'name email role techProfile')
     .lean();
 
   return Response.json(populated);

@@ -13,7 +13,7 @@ export default async function Page() {
       <div className="page-header">
         <div className="page-header__left">
           <div className="page-header__titles">
-            <p className="page-header__eyebrow">Panel de administraci�n</p>
+            <p className="page-header__eyebrow">Panel de administración</p>
             <h1 className="page-header__title">Reportes</h1>
           </div>
         </div>

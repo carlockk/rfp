@@ -50,11 +50,11 @@ export default async function RootLayout({ children }) {
     <html lang='es' data-theme='light'>
       <body>
         <OfflineBanner />
-        <OfflineSyncManager />
         {isAuthenticated ? (
           <div className='app-shell'>
             <SidebarContainer links={navLinks} />
             <div className='app-main'>
+              <OfflineSyncManager />
               <PushRegistration role={session?.role} />
               <main className='app-content'>
                 <Suspense fallback={<div className='card'>Cargando...</div>}>

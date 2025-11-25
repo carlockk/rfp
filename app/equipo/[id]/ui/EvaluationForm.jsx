@@ -104,6 +104,7 @@ export default function EvaluationForm({
   const [fuelEnabled, setFuelEnabled] = useState(false);
   const [energyEnabled, setEnergyEnabled] = useState(false);
   const [adblueEnabled, setAdblueEnabled] = useState(false);
+  const [isAnomaly, setIsAnomaly] = useState(false);
   const [shift, setShift] = useState('dia');
   const [supervisor, setSupervisor] = useState('');
   const [info, setInfo] = useState('');
@@ -213,6 +214,7 @@ export default function EvaluationForm({
     setFuelEnabled(false);
     setEnergyEnabled(false);
     setAdblueEnabled(false);
+    setIsAnomaly(false);
   }, [checklistId, equipment.id, skipChecklist, matchedTemplate?.id]);
 
   useEffect(() => {
@@ -630,6 +632,12 @@ export default function EvaluationForm({
       return;
     }
 
+    if (isAnomaly && !observations.trim()) {
+      setError('Si marcas anomalía, agrega una observación.');
+      setBusy(false);
+      return;
+    }
+
     try {
       const responses = [];
       if (!skipChecklist && selectedChecklist) {
@@ -718,6 +726,7 @@ export default function EvaluationForm({
         equipmentId: equipment.id,
         status,
         observations,
+        anomaly: isAnomaly,
         responses,
         startedAt: startedAt.toISOString(),
         finishedAt: finishedAt.toISOString(),
@@ -760,6 +769,7 @@ export default function EvaluationForm({
       setFuelEnabled(false);
       setEnergyEnabled(false);
       setAdblueEnabled(false);
+      setIsAnomaly(false);
       if (variant === 'candelaria') {
         setSupervisor('');
         setShift('dia');
@@ -1040,6 +1050,15 @@ export default function EvaluationForm({
           onChange={(event) => setObservations(event.target.value)}
           placeholder="Notas o incidencias relevantes"
         />
+        <label className="input-choice" style={{ alignItems: 'center', marginTop: 4 }}>
+          <input
+            type="checkbox"
+            checked={isAnomaly}
+            onChange={(event) => setIsAnomaly(event.target.checked)}
+            style={{ marginRight: 8 }}
+          />
+          Marcar como anomalía (enviará esta observación al administrador)
+        </label>
       </div>
 
       <div className="form-field" style={{ gridColumn: '1 / -1' }}>

@@ -15,12 +15,16 @@ const PROJECT_TOTALS = {
 
 export default async function Summary() {
   await dbConnect();
+
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
+
   const trendStart = new Date(monthStart);
   trendStart.setMonth(trendStart.getMonth() - 5);
+
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 6);
   weekStart.setHours(0, 0, 0, 0);
@@ -32,10 +36,13 @@ export default async function Summary() {
     monthlyTrendRaw,
     dailyUsageRaw
   ] = await Promise.all([
+    // Totales últimos 30 días
     Evaluation.aggregate([
       { $match: { completedAt: { $gte: thirtyDaysAgo } } },
       { $group: { _id: null, ...PROJECT_TOTALS } }
     ]).then((res) => res[0] || null),
+
+    // Top equipos por consumo (últimos 30 días)
     Evaluation.aggregate([
       { $match: { completedAt: { $gte: thirtyDaysAgo } } },
       {
@@ -47,6 +54,8 @@ export default async function Summary() {
       { $sort: { fuel: -1, energy: -1, hours: -1 } },
       { $limit: 5 }
     ]),
+
+    // Uso mensual por equipo (mes calendario actual)
     Evaluation.aggregate([
       { $match: { completedAt: { $gte: monthStart } } },
       {
@@ -61,6 +70,8 @@ export default async function Summary() {
       { $sort: { hours: -1, kilometers: -1 } },
       { $limit: 12 }
     ]),
+
+    // Tendencia mensual últimos 6 meses
     Evaluation.aggregate([
       { $match: { completedAt: { $gte: trendStart } } },
       {
@@ -75,6 +86,8 @@ export default async function Summary() {
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]),
+
+    // Uso diario última semana (por si luego graficamos)
     Evaluation.aggregate([
       { $match: { completedAt: { $gte: weekStart } } },
       {
@@ -114,10 +127,12 @@ export default async function Summary() {
 
   let equipmentDetails = [];
   let usageRows = [];
+
   if (equipmentIds.length) {
     const equipmentDocs = await Equipment.find({ _id: { $in: equipmentIds } })
       .select('code type brand model')
       .lean();
+
     const equipmentMap = equipmentDocs.reduce((acc, doc) => {
       acc[doc._id.toString()] = {
         code: doc.code,
@@ -159,12 +174,18 @@ export default async function Summary() {
         forms: Number(item.count || 0),
         latestHourmeter: Number(item.latestHourmeter || 0),
         latestOdometer: Number(item.latestOdometer || 0),
-        lastEvaluationAt: item.lastEvaluationAt ? new Date(item.lastEvaluationAt).toISOString() : null
+        lastEvaluationAt: item.lastEvaluationAt
+          ? new Date(item.lastEvaluationAt).toISOString()
+          : null
       };
     });
   }
 
-  const monthLabel = monthStart.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+  const monthLabel = monthStart.toLocaleDateString('es-CL', {
+    month: 'long',
+    year: 'numeric'
+  });
+
   const usageTrend = monthlyTrendRaw.map((item) => {
     const date = new Date(item._id.year, item._id.month - 1, 1);
     return {
@@ -173,28 +194,40 @@ export default async function Summary() {
       kilometers: Number(item.kilometers || 0)
     };
   });
-  const totalHourmeter = usageRows.reduce((acc, row) => acc + (row.latestHourmeter || 0), 0);
+
+  const totalHourmeter = usageRows.reduce(
+    (acc, row) => acc + (row.latestHourmeter || 0),
+    0
+  );
+
+  // Agrupación por tipo (incluye "Sin tipo" en vez de omitirlo)
   const hoursByType = usageRows.reduce((acc, row) => {
-    if (!row.type) return acc;
-    const bucket = acc[row.type] || { hours: 0, kilometers: 0, count: 0 };
-    bucket.hours += row.hours;
-    bucket.kilometers += row.kilometers;
-    bucket.count += row.forms;
-    acc[row.type] = bucket;
+    const typeKey =
+      row.type && row.type.trim().length > 0 ? row.type.trim() : 'Sin tipo';
+
+    const bucket = acc[typeKey] || { hours: 0, kilometers: 0, count: 0 };
+    bucket.hours += row.hours || 0;
+    bucket.kilometers += row.kilometers || 0;
+    bucket.count += row.forms || 0;
+    acc[typeKey] = bucket;
     return acc;
   }, {});
+
   const typeBreakdown = Object.entries(hoursByType).map(([type, stats]) => ({
     type,
     hours: stats.hours,
     kilometers: stats.kilometers,
     forms: stats.count
   }));
+
   const dailyUsage = dailyUsageRaw.map((item) => ({
     date: item._id.date,
     hours: Number(item.hours || 0),
     kilometers: Number(item.kilometers || 0)
   }));
-  const hdKmRatio = totals.kilometers > 0 ? totals.hours / totals.kilometers : null;
+
+  const hdKmRatio =
+    totals.kilometers > 0 ? totals.hours / totals.kilometers : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -224,24 +257,27 @@ export default async function Summary() {
                     <td>{item.kilometers.toFixed(1)}</td>
                     <td>{item.fuel.toFixed(1)}</td>
                     <td>{item.energy.toFixed(1)}</td>
-                  <td>{item.adblue.toFixed(1)}</td>
-                  <td>
-                    <Link
-                      href={`/admin/checklists/historial?equipmentId=${item.id}`}
-                      style={{ color: 'var(--accent)' }}
-                    >
-                      {item.count}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                    <td>{item.adblue.toFixed(1)}</td>
+                    <td>
+                      <Link
+                        href={`/admin/checklists/historial?equipmentId=${item.id}`}
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        {item.count}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       ) : (
         <div className="card">
-          <p className="label" style={{ margin: 0, color: 'var(--muted)' }}>
+          <p
+            className="label"
+            style={{ margin: 0, color: 'var(--muted)' }}
+          >
             No hay datos suficientes aún para elaborar el ranking de equipos.
           </p>
         </div>

@@ -1,4 +1,5 @@
 'use client';
+ 'use client';
 
 import { useMemo } from 'react';
 import {
@@ -18,7 +19,14 @@ import {
   LabelList
 } from 'recharts';
 
-const PIE_COLORS = ['#22c55e', '#0ea5e9', '#eab308', '#f97316', '#6366f1', '#ec4899'];
+const PIE_COLORS = [
+  '#22c55e',
+  '#0ea5e9',
+  '#eab308',
+  '#f97316',
+  '#6366f1',
+  '#ec4899'
+];
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString('es-CL', {
@@ -37,12 +45,13 @@ export default function UsageOverview({
 }) {
   const hasTrend = monthlyTrend && monthlyTrend.length > 0;
 
-  // ─────────────────────────────────────────────
   // KPIs + datos para gráfico circular
-  // ─────────────────────────────────────────────
-  const { monthHours, monthKm, pieData } = useMemo(() => {
+  const { monthHours, monthKm, pieData, totalHoursPie } = useMemo(() => {
     const monthHours = usageRows.reduce((acc, r) => acc + (r.hours || 0), 0);
-    const monthKm = usageRows.reduce((acc, r) => acc + (r.kilometers || 0), 0);
+    const monthKm = usageRows.reduce(
+      (acc, r) => acc + (r.kilometers || 0),
+      0
+    );
 
     const totalHoursPie = typeBreakdown.reduce(
       (acc, item) => acc + (item.hours || 0),
@@ -58,10 +67,12 @@ export default function UsageOverview({
           }))
         : [];
 
-    return { monthHours, monthKm, pieData };
+    return { monthHours, monthKm, pieData, totalHoursPie };
   }, [usageRows, typeBreakdown]);
 
   const hasEquipmentUsage = usageRows && usageRows.length > 0;
+  const hasTypeBreakdown = typeBreakdown && typeBreakdown.length > 0;
+  const hasPieData = pieData && pieData.length > 0;
 
   return (
     <div className="card">
@@ -162,13 +173,16 @@ export default function UsageOverview({
           </table>
         </div>
       ) : (
-        <p className="label" style={{ marginTop: 16, color: 'var(--muted)' }}>
+        <p
+          className="label"
+          style={{ marginTop: 16, color: 'var(--muted)' }}
+        >
           Todavía no hay suficiente data mensual para resumir horómetros y
           kilometrajes.
         </p>
       )}
 
-      {/* DISTRIBUCIÓN POR EQUIPO (barras, como Excel) */}
+      {/* DISTRIBUCIÓN POR EQUIPO (barras) */}
       {hasEquipmentUsage && (
         <div style={{ marginTop: 24 }}>
           <h4 style={{ marginBottom: 4 }}>Distribución Horómetro Diario</h4>
@@ -190,7 +204,13 @@ export default function UsageOverview({
                   labelFormatter={(label) => `Equipo: ${label}`}
                 />
                 <Legend />
-                <Bar dataKey="hours" name="Horas" radius={[4, 4, 0, 0]}>
+                <Bar
+                  dataKey="hours"
+                  name="Horas"
+                  radius={[4, 4, 0, 0]}
+                  fill="var(--accent)"
+                  stroke="var(--border)"
+                >
                   <LabelList
                     dataKey="hours"
                     position="top"
@@ -204,7 +224,7 @@ export default function UsageOverview({
       )}
 
       {/* TOTAL HORAS POR DOTACIÓN + GRÁFICO CIRCULAR */}
-      {typeBreakdown.length ? (
+      {hasTypeBreakdown ? (
         <div
           style={{
             marginTop: 24,
@@ -245,35 +265,48 @@ export default function UsageOverview({
               Distribución de horas por tipo (gráfico circular)
             </h4>
             <div style={{ width: '100%', height: 220 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  {/* AHORA ES UN CÍRCULO COMPLETO (sin innerRadius) */}
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={90}
-                    paddingAngle={3}
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={PIE_COLORS[index % PIE_COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value, name, props) => {
-                      const percent = props.payload.percent || 0;
-                      return [
-                        `${formatNumber(value)} h`,
-                        `${name} (${percent.toFixed(1)}%)`
-                      ];
-                    }}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              {hasPieData ? (
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      outerRadius={90}
+                      paddingAngle={3}
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={PIE_COLORS[index % PIE_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name, props) => {
+                        const percent = props.payload.percent || 0;
+                        return [
+                          `${formatNumber(value)} h`,
+                          `${name} (${percent.toFixed(1)}%)`
+                        ];
+                      }}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p
+                  className="label"
+                  style={{
+                    margin: 0,
+                    color: 'var(--muted)'
+                  }}
+                >
+                  No hay horas registradas en este periodo para construir el
+                  gráfico circular. Asegúrate de que los formularios incluyan
+                  lecturas de horómetro.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -282,7 +315,9 @@ export default function UsageOverview({
       {/* TENDENCIA MENSUAL (línea de horas) */}
       {hasTrend ? (
         <div className="card" style={{ marginTop: 24, padding: 16 }}>
-          <h4 style={{ marginTop: 0, marginBottom: 8 }}>Tendencia de uso (últimos 6 meses)</h4>
+          <h4 style={{ marginTop: 0, marginBottom: 8 }}>
+            Tendencia de uso (últimos 6 meses)
+          </h4>
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer>
               <LineChart
@@ -301,14 +336,16 @@ export default function UsageOverview({
                   type="monotone"
                   dataKey="hours"
                   name="Horas"
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                  stroke="var(--accent)"
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
           <p className="label" style={{ marginTop: 12 }}>
-            Cada punto muestra el total mensual de horas capturado desde los formularios enviados por los técnicos.
+            Cada punto muestra el total mensual de horas capturado desde los
+            formularios enviados por los técnicos.
           </p>
         </div>
       ) : null}

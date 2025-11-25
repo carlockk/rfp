@@ -6,10 +6,9 @@ const ONLINE_VISIBILITY_MS = 10_000;
 const OFFLINE_VISIBILITY_MS = 15_000;
 
 export default function OfflineBanner() {
-  const [online, setOnline] = useState(
-    typeof navigator === 'undefined' ? true : navigator.onLine
-  );
-  const [visible, setVisible] = useState(true);
+  // No render en SSR para evitar desajustes de hidratación.
+  const [online, setOnline] = useState(null);
+  const [visible, setVisible] = useState(false);
   const timeoutRef = useRef(null);
 
   useEffect(() => {
@@ -28,7 +27,7 @@ export default function OfflineBanner() {
       scheduleHide(nextOnline);
     }
 
-    scheduleHide(online);
+    updateStatus();
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
 
@@ -43,17 +42,16 @@ export default function OfflineBanner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const message = useMemo(
-    () =>
-      online
-        ? 'Conexion restablecida: los cambios se sincronizan automaticamente.'
-        : 'Modo offline: tus cambios se guardaran cuando vuelva la conexion.',
-    [online]
-  );
+  const message = useMemo(() => {
+    if (online === null) return null;
+    return online
+      ? 'Conexion restablecida: los cambios se sincronizan automaticamente.'
+      : 'Modo offline: tus cambios se guardaran cuando vuelva la conexion.';
+  }, [online]);
 
   const stateClass = online ? 'network-banner--online' : 'network-banner--offline';
 
-  if (!visible) return null;
+  if (!visible || online === null || message === null) return null;
 
   return (
     <div role="status" aria-live="polite" className={`network-banner ${stateClass}`}>

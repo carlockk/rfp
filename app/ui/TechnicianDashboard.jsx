@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import EquipmentHistoryButton from './EquipmentHistoryButton';
 import PaginationControls from './PaginationControls';
 
@@ -44,12 +44,27 @@ export default function TechnicianDashboard({ data }) {
   } = data;
 
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const total = assignedEquipments.length;
+  const filteredEquipments = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    if (!term) return assignedEquipments;
+    return assignedEquipments.filter((equipment) => {
+      const code = (equipment.code || '').toLowerCase();
+      const type = (equipment.type || '').toLowerCase();
+      return code.includes(term) || type.includes(term);
+    });
+  }, [assignedEquipments, searchQuery]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
+
+  const total = filteredEquipments.length;
   const pagedEquipments = useMemo(() => {
     const start = (page - 1) * EQUIPMENT_PAGE_SIZE;
-    return assignedEquipments.slice(start, start + EQUIPMENT_PAGE_SIZE);
-  }, [assignedEquipments, page]);
+    return filteredEquipments.slice(start, start + EQUIPMENT_PAGE_SIZE);
+  }, [filteredEquipments, page]);
 
   const limitedEvaluations = recentEvaluations.slice(0, MAX_RECENT_EVALUATIONS);
 
@@ -86,7 +101,22 @@ export default function TechnicianDashboard({ data }) {
       <div className="row" style={{ marginBottom: 24 }}>
         <div className="col" style={{ flexBasis: '60%' }}>
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Estado de mis equipos</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Estado de mis equipos</h3>
+              <div style={{ minWidth: 220, flex: '0 1 260px' }}>
+                <label className="label" htmlFor="equipment-search">
+                  Buscar equipo
+                </label>
+                <input
+                  id="equipment-search"
+                  type="text"
+                  className="input"
+                  placeholder="Filtra por código o tipo"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+              </div>
+            </div>
             <div className="table-wrapper">
               <table className="table">
                 <thead>
@@ -136,7 +166,11 @@ export default function TechnicianDashboard({ data }) {
                   {!pagedEquipments.length ? (
                     <tr>
                       <td colSpan={5} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
-                        {assignedEquipments.length ? 'No hay equipos en esta página.' : 'No tienes equipos asignados actualmente.'}
+                        {assignedEquipments.length
+                          ? searchQuery
+                            ? 'No hay equipos que coincidan con tu búsqueda.'
+                            : 'No hay equipos en esta página.'
+                          : 'No tienes equipos asignados actualmente.'}
                       </td>
                     </tr>
                   ) : null}

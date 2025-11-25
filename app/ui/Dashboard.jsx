@@ -288,7 +288,13 @@ export default async function Dashboard() {
 
     const lastEvaluations = equipmentIds.length
       ? await Evaluation.aggregate([
-          { $match: { equipment: { $in: equipmentIds }, completedAt: { $exists: true } } },
+          {
+            $match: {
+              equipment: { $in: equipmentIds },
+              completedAt: { $exists: true },
+              technician: technicianId
+            }
+          },
           { $sort: { completedAt: -1 } },
           {
             $group: {

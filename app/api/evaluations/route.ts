@@ -12,6 +12,7 @@ import { broadcastPush, isPushAvailable } from '@/lib/push';
 import { getSession } from '@/lib/auth';
 import { requirePermission } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
+import { sendMail } from '@/lib/mailer';
 import {
   TEMPLATE_METRIC_FIELD_MAP,
   TemplateMetricKey,
@@ -80,6 +81,7 @@ type EvaluationPayload = {
   template?: TemplatePayload;
   skipChecklist?: boolean;
   evidencePhotos?: TemplateAttachmentPayload[];
+  anomaly?: boolean;
 };
 
 const sanitizeResponses = (responses: EvaluationPayload['responses']) =>
@@ -357,6 +359,8 @@ export async function POST(req: NextRequest) {
     MAX_EVIDENCE_ATTACHMENTS
   );
 
+  const anomaly = payload.anomaly === true;
+
   const templateMetrics = extractTemplateMetrics(templateFields, templateValues);
 
   let previousEvaluation: { hourmeterCurrent?: number | null; odometerCurrent?: number | null } | null = null;
@@ -375,6 +379,7 @@ export async function POST(req: NextRequest) {
     equipment: equipment._id,
     technician: session.id,
     status,
+    anomaly,
     responses,
     observations,
     startedAt,
@@ -520,6 +525,32 @@ export async function POST(req: NextRequest) {
       energyAddedKwh: evaluationData.energyAddedKwh ?? null
     }
   });
+
+  if (anomaly && observations) {
+    try {
+      const adminUsers = await User.find({ role: { $in: ['admin', 'superadmin'] } })
+        .select('email')
+        .lean();
+      const recipients = adminUsers
+        .map((u) => u.email)
+        .filter((email) => typeof email === 'string' && email.trim());
+      if (recipients.length) {
+        const subject = `Anomalía reportada en ${equipment.code}${contextName ? ` (${contextName})` : ''}`;
+        const text = [
+          `Equipo: ${equipment.code}`,
+          `Checklist/plantilla: ${contextName || 'N/D'}`,
+          `Técnico: ${session.email || session.id}`,
+          `Fecha: ${completedAt.toISOString()}`,
+          '',
+          'Observación:',
+          observations
+        ].join('\n');
+        await sendMail({ to: recipients.join(','), subject, text });
+      }
+    } catch (err) {
+      console.error('No se pudo enviar alerta de anomalía', err);
+    }
+  }
 
   return NextResponse.json(evaluation, { status: 201 });
 }
