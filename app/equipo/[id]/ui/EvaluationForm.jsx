@@ -129,6 +129,7 @@ export default function EvaluationForm({
       })),
     [checklists]
   );
+  const hasChecklists = checklists.length > 0;
 
   const matchedTemplate = useMemo(
     () =>
@@ -151,9 +152,9 @@ export default function EvaluationForm({
   }));
 
   const selectedChecklist = useMemo(() => {
-    if (skipChecklist) return null;
+    if (skipChecklist || !hasChecklists) return null;
     return checklists.find((item) => item.id === checklistId) || null;
-  }, [checklists, checklistId, skipChecklist]);
+  }, [checklists, checklistId, skipChecklist, hasChecklists]);
 
   const canSkipChecklist = !templateRequiresChecklist && checklistSkipAllowed;
 
@@ -200,12 +201,12 @@ export default function EvaluationForm({
   }, [matchedTemplate?.id]);
 
   useEffect(() => {
-    if (skipChecklist) {
+    if (skipChecklist || !hasChecklists) {
       setChecklistId('');
       return;
     }
     setChecklistId(checklists[0]?.id || '');
-  }, [checklists, skipChecklist]);
+  }, [checklists, skipChecklist, hasChecklists]);
 
   useEffect(() => {
     startRef.current = new Date();
@@ -561,8 +562,10 @@ export default function EvaluationForm({
     );
   };
 
+  const effectiveSkipChecklist = skipChecklist || !hasChecklists;
+
   const validateRequired = () => {
-    if (skipChecklist || !selectedChecklist) return null;
+    if (effectiveSkipChecklist || !selectedChecklist) return null;
     const missing = [];
     const traverse = (nodes) => {
       nodes.forEach((node) => {
@@ -593,7 +596,7 @@ export default function EvaluationForm({
     setError('');
     setInfo('');
 
-    const checklistRequired = !skipChecklist;
+    const checklistRequired = !effectiveSkipChecklist;
     if (checklistRequired && (!checklistId || !selectedChecklist)) {
       setError('Selecciona un checklist');
       setBusy(false);
@@ -673,7 +676,7 @@ export default function EvaluationForm({
 
     try {
       const responses = [];
-      if (!skipChecklist && selectedChecklist) {
+      if (!effectiveSkipChecklist && selectedChecklist) {
         collectResponses(selectedChecklist.nodes || [], answers, responses);
       }
 
@@ -755,7 +758,7 @@ export default function EvaluationForm({
       );
 
       const payload = {
-        checklistId: !skipChecklist ? checklistId : undefined,
+        checklistId: !effectiveSkipChecklist ? checklistId : undefined,
         equipmentId: equipment.id,
         status,
         observations,
@@ -766,7 +769,7 @@ export default function EvaluationForm({
         durationSeconds,
         formData,
         completedAt: finishedAt.toISOString(),
-        checklistVersion: !skipChecklist ? selectedChecklist?.version || 1 : 0,
+        checklistVersion: !effectiveSkipChecklist ? selectedChecklist?.version || 1 : 0,
         anomalyRecipients: isAnomaly ? anomalyRecipients : [],
         template: matchedTemplate
           ? {
@@ -781,7 +784,7 @@ export default function EvaluationForm({
             }
           : undefined,
         evidencePhotos: evidencePhotos.length ? evidencePhotos : undefined,
-        skipChecklist
+        skipChecklist: effectiveSkipChecklist
       };
 
       const result = await submitEvaluation(payload);
@@ -839,7 +842,7 @@ export default function EvaluationForm({
         <TemplateForm template={matchedTemplate} onChange={setTemplateState} />
       ) : null}
 
-      {canSkipChecklist ? (
+      {hasChecklists && canSkipChecklist ? (
         <div className="form-field form-field--full">
           <label className="label" htmlFor="skip-checklist">
             <input
@@ -858,7 +861,7 @@ export default function EvaluationForm({
         </div>
       ) : null}
 
-      {!skipChecklist ? (
+      {!effectiveSkipChecklist ? (
         <div className="form-field">
           <label className="label" htmlFor="checklist">
             Checklist
@@ -888,7 +891,9 @@ export default function EvaluationForm({
               borderRadius: 8
             }}
           >
-            Checklist omitido. Solo se registrará el formulario operativo.
+            {hasChecklists
+              ? 'Checklist omitido. Solo se registrará el formulario operativo.'
+              : 'No hay checklist asignado a este equipo. Se registrará solo el formulario operativo.'}
           </div>
         </div>
       )}
