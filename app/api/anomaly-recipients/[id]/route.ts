@@ -59,15 +59,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     { new: true }
   ).lean();
 
-  if (!doc) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
+  if (!doc || Array.isArray(doc)) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
   return NextResponse.json({
-    id: doc._id.toString(),
-    name: doc.name,
-    email: doc.email,
-    active: Boolean(doc.active),
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt
+    id: (doc as any)._id?.toString?.() || id,
+    name: (doc as any).name,
+    email: (doc as any).email,
+    active: Boolean((doc as any).active),
+    createdAt: (doc as any).createdAt,
+    updatedAt: (doc as any).updatedAt
   });
 }
 
