@@ -13,6 +13,7 @@ import { getSession } from '@/lib/auth';
 import { requirePermission } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
 import { sendMail } from '@/lib/mailer';
+import AnomalyRecipient from '@/models/AnomalyRecipient';
 import {
   TEMPLATE_METRIC_FIELD_MAP,
   TemplateMetricKey,
@@ -82,6 +83,7 @@ type EvaluationPayload = {
   skipChecklist?: boolean;
   evidencePhotos?: TemplateAttachmentPayload[];
   anomaly?: boolean;
+  anomalyRecipients?: string[];
 };
 
 const sanitizeResponses = (responses: EvaluationPayload['responses']) =>
@@ -360,6 +362,15 @@ export async function POST(req: NextRequest) {
   );
 
   const anomaly = payload.anomaly === true;
+  const anomalyRecipientIds = Array.isArray(payload.anomalyRecipients)
+    ? Array.from(
+        new Set(
+          payload.anomalyRecipients
+            .map((id) => (typeof id === 'string' ? id.trim() : ''))
+            .filter((id) => id && mongoose.isValidObjectId(id))
+        )
+      )
+    : [];
 
   const templateMetrics = extractTemplateMetrics(templateFields, templateValues);
 
@@ -394,6 +405,7 @@ export async function POST(req: NextRequest) {
     templateFields,
     templateAttachments,
     evidencePhotos,
+    anomalyRecipients: anomalyRecipientIds,
     skipChecklist
   };
 
@@ -519,6 +531,7 @@ export async function POST(req: NextRequest) {
       templateId: templateRef ? String(templateRef) : null,
       templateName,
       skipChecklist,
+      anomalyRecipients: anomalyRecipientIds,
       hourmeterCurrent: evaluationData.hourmeterCurrent ?? null,
       odometerCurrent: evaluationData.odometerCurrent ?? null,
       fuelAddedLiters: evaluationData.fuelAddedLiters ?? null,
@@ -528,12 +541,16 @@ export async function POST(req: NextRequest) {
 
   if (anomaly && observations) {
     try {
-      const adminUsers = await User.find({ role: { $in: ['admin', 'superadmin'] } })
-        .select('email')
-        .lean();
-      const recipients = adminUsers
-        .map((u) => u.email)
-        .filter((email) => typeof email === 'string' && email.trim());
+      let recipients: string[] = [];
+      if (anomalyRecipientIds.length) {
+        const docs = await AnomalyRecipient.find({ _id: { $in: anomalyRecipientIds }, active: true })
+          .select('email')
+          .lean();
+        recipients = docs
+          .map((item) => (typeof item.email === 'string' ? item.email.trim() : ''))
+          .filter(Boolean);
+      }
+
       if (recipients.length) {
         const subject = `Anomalía reportada en ${equipment.code}${contextName ? ` (${contextName})` : ''}`;
         const text = [

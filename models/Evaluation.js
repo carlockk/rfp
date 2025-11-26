@@ -47,6 +47,7 @@ const EvaluationSchema = new mongoose.Schema({
     ],
     default: []
   },
+  anomalyRecipients: { type: [String], default: [] },
   skipChecklist: { type: Boolean, default: false },
   hourmeterCurrent: { type: Number, default: null },
   hourmeterPrevious: { type: Number, default: null },

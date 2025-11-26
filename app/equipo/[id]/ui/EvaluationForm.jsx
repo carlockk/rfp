@@ -105,6 +105,9 @@ export default function EvaluationForm({
   const [energyEnabled, setEnergyEnabled] = useState(false);
   const [adblueEnabled, setAdblueEnabled] = useState(false);
   const [isAnomaly, setIsAnomaly] = useState(false);
+  const [anomalyRecipients, setAnomalyRecipients] = useState([]);
+  const [availableRecipients, setAvailableRecipients] = useState([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
   const [shift, setShift] = useState('dia');
   const [supervisor, setSupervisor] = useState('');
   const [info, setInfo] = useState('');
@@ -215,6 +218,7 @@ export default function EvaluationForm({
     setEnergyEnabled(false);
     setAdblueEnabled(false);
     setIsAnomaly(false);
+    setAnomalyRecipients([]);
   }, [checklistId, equipment.id, skipChecklist, matchedTemplate?.id]);
 
   useEffect(() => {
@@ -223,11 +227,34 @@ export default function EvaluationForm({
     setEvidenceUploadingCount(0);
   }, [equipment.id]);
 
+  useEffect(() => {
+    if (isAnomaly) {
+      loadAnomalyRecipients();
+    }
+  }, [isAnomaly]);
+
   const updateAnswer = (key, value) => {
     setAnswers((prev) => ({
       ...prev,
       [key]: value
     }));
+  };
+
+  const loadAnomalyRecipients = async () => {
+    if (availableRecipients.length || loadingRecipients) return;
+    setLoadingRecipients(true);
+    try {
+      const res = await fetch('/api/anomaly-recipients');
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setAvailableRecipients(data);
+      }
+    } catch (err) {
+      setError(err.message || 'No se pudieron cargar los correos de anomalía');
+    } finally {
+      setLoadingRecipients(false);
+    }
   };
 
   const handleMultiChange = (node, value) => {
@@ -638,6 +665,12 @@ export default function EvaluationForm({
       return;
     }
 
+    if (isAnomaly && (!anomalyRecipients.length || anomalyRecipients.every((r) => !r))) {
+      setError('Selecciona al menos un correo para enviar la anomalía.');
+      setBusy(false);
+      return;
+    }
+
     try {
       const responses = [];
       if (!skipChecklist && selectedChecklist) {
@@ -734,6 +767,7 @@ export default function EvaluationForm({
         formData,
         completedAt: finishedAt.toISOString(),
         checklistVersion: !skipChecklist ? selectedChecklist?.version || 1 : 0,
+        anomalyRecipients: isAnomaly ? anomalyRecipients : [],
         template: matchedTemplate
           ? {
               id: matchedTemplate.id,
@@ -770,6 +804,7 @@ export default function EvaluationForm({
       setEnergyEnabled(false);
       setAdblueEnabled(false);
       setIsAnomaly(false);
+      setAnomalyRecipients([]);
       if (variant === 'candelaria') {
         setSupervisor('');
         setShift('dia');
@@ -1054,11 +1089,61 @@ export default function EvaluationForm({
           <input
             type="checkbox"
             checked={isAnomaly}
-            onChange={(event) => setIsAnomaly(event.target.checked)}
+            onChange={(event) => {
+              const next = event.target.checked;
+              setIsAnomaly(next);
+              if (next) {
+                loadAnomalyRecipients();
+              } else {
+                setAnomalyRecipients([]);
+              }
+            }}
             style={{ marginRight: 8 }}
           />
-          Marcar como anomalía (enviará esta observación al administrador)
+          Marcar como anomalía y enviar por correo
         </label>
+        {isAnomaly ? (
+          <div style={{ marginTop: 8 }}>
+            <p className="label" style={{ marginBottom: 8 }}>
+              Selecciona a quién enviar esta observación.
+            </p>
+            {loadingRecipients ? (
+              <p className="label" style={{ color: 'var(--muted)' }}>Cargando correos...</p>
+            ) : availableRecipients.length ? (
+              <div className="checklist-options" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                {availableRecipients.map((recipient) => {
+                  const checked = anomalyRecipients.includes(recipient.id);
+                  return (
+                    <label key={recipient.id} className="input-choice" style={{ gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          setAnomalyRecipients((prev) => {
+                            const set = new Set(prev);
+                            if (event.target.checked) {
+                              set.add(recipient.id);
+                            } else {
+                              set.delete(recipient.id);
+                            }
+                            return Array.from(set);
+                          });
+                        }}
+                      />
+                      <span>
+                        <strong>{recipient.name}</strong> <span className="label">{recipient.email}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="label" style={{ color: 'var(--muted)' }}>
+                No hay correos configurados. Pídele a un administrador que agregue destinatarios de anomalías.
+              </p>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="form-field" style={{ gridColumn: '1 / -1' }}>

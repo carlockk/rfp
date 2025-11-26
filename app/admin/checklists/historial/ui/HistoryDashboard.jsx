@@ -777,7 +777,7 @@ export default function HistoryDashboard({
               <th>Estado</th>
               <th>Duracion</th>
               <th>Fotos</th>
-              <th>Observaciones</th>
+              <th>Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -843,7 +843,7 @@ export default function HistoryDashboard({
                           textDecoration: 'underline'
                         }}
                       >
-                        Ver
+                        Ver checklist
                       </button>
                     )}
                   </div>

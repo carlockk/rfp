@@ -35,6 +35,7 @@ export default async function RootLayout({ children }) {
           { href: '/admin/checklists', label: 'Checklists' },
           { href: '/admin/formularios', label: 'Formularios' },
           { href: '/admin/checklists/historial', label: 'Historial' },
+          { href: '/admin/anomalias', label: 'Anomalias' },
           { href: '/admin/reportes', label: 'Reportes' },
           { href: '/admin/usuarios', label: 'Usuarios' }
         ];

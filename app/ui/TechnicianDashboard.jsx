@@ -19,6 +19,178 @@ const STATUS_COLORS = {
 const EQUIPMENT_PAGE_SIZE = 6;
 const MAX_RECENT_EVALUATIONS = 4;
 
+const flattenTemplateFieldsClient = (fields = []) => {
+  const result = [];
+  fields.forEach((field) => {
+    if (!field || typeof field !== 'object') return;
+    result.push(field);
+    if (Array.isArray(field.children) && field.children.length) {
+      result.push(...flattenTemplateFieldsClient(field.children));
+    }
+  });
+  return result;
+};
+
+const resolveFieldLabel = (field, fallbackKey) => {
+  if (!field || typeof field !== 'object') return fallbackKey;
+  return (
+    field.label ||
+    field.title ||
+    field.name ||
+    field.text ||
+    field.placeholder ||
+    field.key ||
+    fallbackKey
+  );
+};
+
+const formatAnswerValue = (value) => {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const flattenChecklistNodes = (checklist) => {
+  if (!checklist || typeof checklist !== 'object') return [];
+
+  let nodes = [];
+
+  if (Array.isArray(checklist.nodes)) {
+    nodes = checklist.nodes;
+  } else if (checklist.structure && Array.isArray(checklist.structure.nodes)) {
+    nodes = checklist.structure.nodes;
+  } else if (Array.isArray(checklist.versions) && checklist.versions.length) {
+    const currentVersion = checklist.currentVersion;
+    const versionObj =
+      checklist.versions.find((v) => v.version === currentVersion) ||
+      checklist.versions[0];
+    if (Array.isArray(versionObj?.nodes)) {
+      nodes = versionObj.nodes;
+    }
+  }
+
+  const result = [];
+  const visit = (arr) => {
+    arr.forEach((node) => {
+      if (!node || typeof node !== 'object') return;
+      result.push(node);
+      if (Array.isArray(node.children) && node.children.length) {
+        visit(node.children);
+      }
+      if (Array.isArray(node.items) && node.items.length) {
+        visit(node.items);
+      }
+    });
+  };
+
+  visit(nodes);
+  return result;
+};
+
+const buildChecklistQuestionMap = (checklistStructures) => {
+  const outerMap = new Map();
+
+  (checklistStructures || []).forEach((checklist) => {
+    const id =
+      checklist.id ||
+      (checklist._id && checklist._id.toString ? checklist._id.toString() : checklist._id);
+    if (!id) return;
+
+    const nodes = flattenChecklistNodes(checklist);
+    const innerMap = new Map();
+
+    nodes.forEach((node) => {
+      const key = node.key || node.id;
+      if (!key) return;
+      const label =
+        node.label ||
+        node.title ||
+        node.text ||
+        node.name ||
+        node.placeholder ||
+        key;
+      innerMap.set(key, label);
+    });
+
+    if (innerMap.size) {
+      outerMap.set(id, innerMap);
+    }
+  });
+
+  return outerMap;
+};
+
+const buildAnswersFromEvaluation = (item, checklistQuestionMap) => {
+  const answers = [];
+
+  const templateFields = Array.isArray(item.templateFields)
+    ? flattenTemplateFieldsClient(item.templateFields)
+    : [];
+  const templateFieldMap = new Map(
+    templateFields
+      .map((field) => {
+        const key = typeof field?.key === 'string' ? field.key : '';
+        return key ? [key, field] : null;
+      })
+      .filter(Boolean)
+  );
+
+  const checklistIdRaw =
+    item.checklist?._id?.toString?.() ||
+    item.checklist?._id ||
+    item.checklistId ||
+    '';
+  const checklistQuestions =
+    checklistIdRaw && checklistQuestionMap
+      ? checklistQuestionMap.get(checklistIdRaw)
+      : null;
+
+  const resolveLabelFromAnySource = (itemKey) => {
+    if (!itemKey) return '';
+    const templateField = templateFieldMap.get(itemKey);
+    if (templateField) return resolveFieldLabel(templateField, itemKey);
+    if (checklistQuestions && checklistQuestions.has(itemKey)) {
+      return checklistQuestions.get(itemKey) || itemKey;
+    }
+    return itemKey;
+  };
+
+  if (Array.isArray(item.responses) && item.responses.length) {
+    item.responses.forEach((res) => {
+      const itemKey = typeof res?.itemKey === 'string' ? res.itemKey : '';
+      if (!itemKey) return;
+      const label = resolveLabelFromAnySource(itemKey);
+      answers.push({
+        label,
+        value: formatAnswerValue(res.value),
+        note: typeof res.note === 'string' && res.note.trim() ? res.note.trim() : ''
+      });
+    });
+  } else if (item.formData && typeof item.formData === 'object') {
+    Object.entries(item.formData).forEach(([key, value]) => {
+      const label = resolveLabelFromAnySource(key);
+      answers.push({
+        label,
+        value: formatAnswerValue(value),
+        note: ''
+      });
+    });
+  } else if (item.templateValues && typeof item.templateValues === 'object') {
+    Object.entries(item.templateValues).forEach(([key, value]) => {
+      const label = resolveLabelFromAnySource(key);
+      answers.push({
+        label,
+        value: formatAnswerValue(value),
+        note: ''
+      });
+    });
+  }
+
+  return answers;
+};
+
 const formatDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -45,6 +217,12 @@ export default function TechnicianDashboard({ data }) {
 
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [previewAnswers, setPreviewAnswers] = useState(null);
+  const [checklistStructures, setChecklistStructures] = useState([]);
+  const checklistQuestionMap = useMemo(
+    () => buildChecklistQuestionMap(checklistStructures),
+    [checklistStructures]
+  );
 
   const filteredEquipments = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
@@ -60,6 +238,22 @@ export default function TechnicianDashboard({ data }) {
     setPage(1);
   }, [searchQuery]);
 
+  useEffect(() => {
+    const loadChecklists = async () => {
+      try {
+        const res = await fetch('/api/checklists?includeStructure=true&includeInactive=true', {
+          cache: 'no-store'
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setChecklistStructures(Array.isArray(data) ? data : []);
+      } catch {
+        setChecklistStructures([]);
+      }
+    };
+    loadChecklists();
+  }, []);
+
   const total = filteredEquipments.length;
   const pagedEquipments = useMemo(() => {
     const start = (page - 1) * EQUIPMENT_PAGE_SIZE;
@@ -67,6 +261,26 @@ export default function TechnicianDashboard({ data }) {
   }, [filteredEquipments, page]);
 
   const limitedEvaluations = recentEvaluations.slice(0, MAX_RECENT_EVALUATIONS);
+
+  const hasAnswers = (item) => {
+    if (Array.isArray(item.responses) && item.responses.length) return true;
+    if (item.formData && typeof item.formData === 'object' && Object.keys(item.formData).length) return true;
+    if (item.templateValues && typeof item.templateValues === 'object' && Object.keys(item.templateValues).length) {
+      return true;
+    }
+    return false;
+  };
+
+  const handleOpenAnswers = (item) => {
+    const answers = buildAnswersFromEvaluation(item, checklistQuestionMap);
+    setPreviewAnswers({
+      title: item.checklist?.name || item.templateName || 'Checklist realizado',
+      status: item.status,
+      equipment: item.equipment?.code || '',
+      completedAt: item.completedAt,
+      answers
+    });
+  };
 
   return (
     <div className="dashboard">
@@ -230,6 +444,7 @@ export default function TechnicianDashboard({ data }) {
                 <th>Estado</th>
                 <th>Duración</th>
                 <th>Observaciones</th>
+                <th>Acción</th>
               </tr>
             </thead>
             <tbody>
@@ -253,11 +468,32 @@ export default function TechnicianDashboard({ data }) {
                   </td>
                   <td>{formatDuration(item.durationSeconds)}</td>
                   <td>{item.observations || '-'}</td>
+                  <td>
+                    {hasAnswers(item) ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAnswers(item)}
+                        style={{
+                          padding: 0,
+                          border: 'none',
+                          background: 'none',
+                          color: 'var(--accent)',
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        Ver checklist
+                      </button>
+                    ) : (
+                      <span className="label">-</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {!recentEvaluations.length ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
                     Aún no registras evaluaciones.
                   </td>
                 </tr>
@@ -266,6 +502,55 @@ export default function TechnicianDashboard({ data }) {
           </table>
         </div>
       </div>
+      {previewAnswers ? (
+        <div className="modal-overlay" onClick={() => setPreviewAnswers(null)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div style={{ marginBottom: 16 }}>
+              <h2 className="modal__title" style={{ marginBottom: 8 }}>
+                {previewAnswers.title}
+              </h2>
+              <p className="label" style={{ fontSize: 13 }}>
+                <strong>Equipo:</strong> {previewAnswers.equipment || '-'} •{' '}
+                <strong>Estado:</strong> {STATUS_LABELS[previewAnswers.status] || previewAnswers.status || '-'} •{' '}
+                <strong>Fecha:</strong> {formatDate(previewAnswers.completedAt)}
+              </p>
+            </div>
+
+            {previewAnswers.answers && previewAnswers.answers.length ? (
+              <div className="table-wrapper" style={{ maxHeight: '60vh', overflow: 'auto', marginBottom: 16 }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Pregunta</th>
+                      <th>Respuesta</th>
+                      <th>Nota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewAnswers.answers.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{ width: '45%' }}>{row.label}</td>
+                        <td style={{ width: '35%' }}>{row.value}</td>
+                        <td style={{ width: '20%' }}>{row.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="label" style={{ marginBottom: 16 }}>
+                No hay respuestas detalladas para esta evaluación.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button className="btn" type="button" onClick={() => setPreviewAnswers(null)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
