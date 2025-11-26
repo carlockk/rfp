@@ -35,6 +35,7 @@ const FALLBACK_FIELD_KEYS: Record<keyof TemplateNumericMetrics, string[]> = {
 };
 const MAX_TEMPLATE_ATTACHMENT_SIZE = 1024 * 1024 * 3;
 const MAX_EVIDENCE_ATTACHMENTS = 3;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 type TemplateAttachmentPayload = {
   name?: string;
@@ -362,15 +363,23 @@ export async function POST(req: NextRequest) {
   );
 
   const anomaly = payload.anomaly === true;
-  const anomalyRecipientIds = Array.isArray(payload.anomalyRecipients)
-    ? Array.from(
-        new Set(
-          payload.anomalyRecipients
-            .map((id) => (typeof id === 'string' ? id.trim() : ''))
-            .filter((id) => id && mongoose.isValidObjectId(id))
-        )
-      )
+  const rawRecipients = Array.isArray(payload.anomalyRecipients)
+    ? payload.anomalyRecipients
     : [];
+  const anomalyRecipientIds = Array.from(
+    new Set(
+      rawRecipients
+        .map((id) => (typeof id === 'string' ? id.trim() : ''))
+        .filter((id) => id && mongoose.isValidObjectId(id))
+    )
+  );
+  const anomalyRecipientEmails = Array.from(
+    new Set(
+      rawRecipients
+        .map((item) => (typeof item === 'string' ? item.trim().toLowerCase() : ''))
+        .filter((val) => val && EMAIL_REGEX.test(val))
+    )
+  );
 
   const templateMetrics = extractTemplateMetrics(templateFields, templateValues);
 
@@ -405,7 +414,7 @@ export async function POST(req: NextRequest) {
     templateFields,
     templateAttachments,
     evidencePhotos,
-    anomalyRecipients: anomalyRecipientIds,
+    anomalyRecipients: Array.from(new Set([...anomalyRecipientIds, ...anomalyRecipientEmails])),
     skipChecklist
   };
 
@@ -541,14 +550,15 @@ export async function POST(req: NextRequest) {
 
   if (anomaly && observations) {
     try {
-      let recipients: string[] = [];
+      let recipients: string[] = [...anomalyRecipientEmails];
       if (anomalyRecipientIds.length) {
         const docs = await AnomalyRecipient.find({ _id: { $in: anomalyRecipientIds }, active: true })
           .select('email')
           .lean();
-        recipients = docs
-          .map((item) => (typeof item.email === 'string' ? item.email.trim() : ''))
+        const fromDb = docs
+          .map((item) => (typeof item.email === 'string' ? item.email.trim().toLowerCase() : ''))
           .filter(Boolean);
+        recipients = Array.from(new Set([...recipients, ...fromDb]));
       }
 
       if (recipients.length) {
