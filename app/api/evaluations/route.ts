@@ -261,7 +261,9 @@ export async function POST(req: NextRequest) {
       : templatePayload.isChecklistMandatory === false;
 
   const requestedSkip = Boolean(payload.skipChecklist);
-  const skipChecklist = templateAllowsSkip && requestedSkip && !hasChecklistId;
+  const skipChecklist =
+    (!hasChecklistId && requestedSkip) ||
+    (templateAllowsSkip && requestedSkip && !hasChecklistId);
 
   const checklistId = skipChecklist ? '' : hasChecklistId ? rawChecklistId : '';
 
