@@ -29,6 +29,10 @@ export default async function RootLayout({ children }) {
           { href: '/', label: 'Mis equipos' },
           { href: '/equipo/scan', label: 'Escanear QR' }
         ]
+      : session?.role === 'supervisor'
+        ? [
+            { href: '/supervisor', label: 'Checklists asignados' }
+          ]
       : [
           { href: '/', label: 'Dashboard' },
           { href: '/admin/equipos', label: 'Equipos' },
@@ -45,6 +49,8 @@ export default async function RootLayout({ children }) {
       ? session?.techProfile === 'candelaria'
         ? 'candelaria'
         : 'externo'
+      : session?.role === 'supervisor'
+        ? 'supervisor'
       : 'admin';
 
   return (

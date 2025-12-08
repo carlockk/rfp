@@ -13,6 +13,7 @@ import { getSession } from '@/lib/auth';
 import { requirePermission } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
 import { sendMail } from '@/lib/mailer';
+import { sendWhatsappMessage } from '@/lib/whatsapp';
 import AnomalyRecipient from '@/models/AnomalyRecipient';
 import {
   TEMPLATE_METRIC_FIELD_MAP,
@@ -33,6 +34,7 @@ const FALLBACK_FIELD_KEYS: Record<keyof TemplateNumericMetrics, string[]> = {
   batteryLevelBefore: ['bateria_anterior', 'battery_level_before'],
   batteryLevelAfter: ['bateria_actual', 'battery_level_after']
 };
+const SUPERVISOR_STATUS = new Set(['pendiente', 'en_revision', 'aprobado', 'rechazado']);
 const MAX_TEMPLATE_ATTACHMENT_SIZE = 1024 * 1024 * 3;
 const MAX_EVIDENCE_ATTACHMENTS = 3;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
@@ -67,6 +69,7 @@ type TemplatePayload = {
 type EvaluationPayload = {
   checklistId?: string;
   equipmentId?: string;
+  supervisorId?: string;
   status?: string;
   observations?: string;
   completedAt?: string;
@@ -284,6 +287,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Checklist no encontrado' }, { status: 404 });
   }
 
+  const supervisorIdRaw =
+    typeof payload.supervisorId === 'string' ? payload.supervisorId.trim() : '';
+  let supervisorUser: Record<string, any> | null = null;
+
+  if (supervisorIdRaw) {
+    if (!mongoose.isValidObjectId(supervisorIdRaw)) {
+      return NextResponse.json({ error: 'supervisorId invalido' }, { status: 400 });
+    }
+    supervisorUser = await User.findById(supervisorIdRaw).lean<Record<string, any>>();
+    if (!supervisorUser || supervisorUser.role !== 'supervisor') {
+      return NextResponse.json({ error: 'Supervisor no encontrado' }, { status: 404 });
+    }
+  } else if (session.role === 'tecnico') {
+    return NextResponse.json({ error: 'Supervisor requerido' }, { status: 400 });
+  }
+
   if (session.role === 'tecnico') {
     const operatorMatches =
       Array.isArray(equipment.operators) &&
@@ -396,6 +415,8 @@ export async function POST(req: NextRequest) {
   const templateRef =
     templateDoc?._id ?? (templateIdRaw && mongoose.isValidObjectId(templateIdRaw) ? templateIdRaw : undefined);
 
+  const supervisorAssignedAt = supervisorUser ? new Date() : null;
+
   const evaluationData: Record<string, any> = {
     checklist: skipChecklist ? null : checklist?._id || checklistId || null,
     equipment: equipment._id,
@@ -417,6 +438,13 @@ export async function POST(req: NextRequest) {
     templateAttachments,
     evidencePhotos,
     anomalyRecipients: Array.from(new Set([...anomalyRecipientIds, ...anomalyRecipientEmails])),
+    supervisor: supervisorUser?._id || null,
+    supervisorName: supervisorUser?.name || supervisorUser?.email || '',
+    supervisorPhone: supervisorUser?.phone || '',
+    supervisorStatus: supervisorUser ? 'en_revision' : 'pendiente',
+    supervisorNote: '',
+    supervisorStatusAt: supervisorAssignedAt,
+    supervisorAssignedAt,
     skipChecklist
   };
 
@@ -483,6 +511,16 @@ export async function POST(req: NextRequest) {
 
   const contextName = checklist?.name || templateName || 'Formulario de operador';
 
+  if (supervisorUser) {
+    const supervisorLabel = supervisorUser.name || supervisorUser.email || 'Supervisor';
+    await sendWhatsappMessage({
+      to: supervisorUser.phone || '',
+      message: `Tienes un checklist para revisar del equipo ${equipment.code}${contextName ? ` (${contextName})` : ''}.`
+    });
+    console.log('[whatsapp] aviso supervisor', supervisorLabel);
+  }
+
+
   if (status === 'critico') {
     const notification = await Notification.create({
       message: `Falla critica detectada en ${equipment.code}${contextName ? ` (${contextName})` : ''}.`,
@@ -542,6 +580,8 @@ export async function POST(req: NextRequest) {
       templateId: templateRef ? String(templateRef) : null,
       templateName,
       skipChecklist,
+      supervisorId: supervisorUser?._id?.toString() || null,
+      supervisorStatus: supervisorUser ? 'en_revision' : 'pendiente',
       anomalyRecipients: anomalyRecipientIds,
       hourmeterCurrent: evaluationData.hourmeterCurrent ?? null,
       odometerCurrent: evaluationData.odometerCurrent ?? null,
@@ -585,72 +625,99 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requirePermission(req, 'ver_reporte');
-  if (auth instanceof NextResponse) return auth;
+  try {
+    const baseSession = await getSession();
+    if (!baseSession?.id) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
 
-  const session = auth;
+    let session = baseSession;
+    const roleKey = String(session.role || '').toLowerCase();
 
-  await dbConnect();
+    if (!['supervisor', 'admin', 'superadmin'].includes(roleKey)) {
+      const auth = await requirePermission(req, 'ver_reporte');
+      if (auth instanceof NextResponse) return auth;
+      session = auth;
+    }
 
-  const { searchParams } = new URL(req.url);
+    await dbConnect();
 
-  const query: Record<string, unknown> = {};
+    const { searchParams } = new URL(req.url);
 
-  const from = searchParams.get('from');
-  const to = searchParams.get('to');
-  const status = searchParams.get('status');
-  const equipmentId = searchParams.get('equipmentId');
-  const checklistId = searchParams.get('checklistId');
-  const technicianIdParam = searchParams.get('technicianId');
+    const query: Record<string, unknown> = {};
 
-  if (from || to) {
-    const range: Record<string, Date> = {};
-    if (from) {
-      const fromDate = new Date(from);
-      if (!Number.isNaN(fromDate.getTime())) {
-        range.$gte = fromDate;
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+    const status = searchParams.get('status');
+    const equipmentId = searchParams.get('equipmentId');
+    const checklistId = searchParams.get('checklistId');
+    const technicianIdParam = searchParams.get('technicianId');
+    const supervisorIdParam = searchParams.get('supervisorId');
+    const supervisorStatusParam = searchParams.get('supervisorStatus');
+
+    if (from || to) {
+      const range: Record<string, Date> = {};
+      if (from) {
+        const fromDate = new Date(from);
+        if (!Number.isNaN(fromDate.getTime())) {
+          range.$gte = fromDate;
+        }
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!Number.isNaN(toDate.getTime())) {
+          range.$lte = toDate;
+        }
+      }
+      if (Object.keys(range).length > 0) {
+        query.completedAt = range;
       }
     }
-    if (to) {
-      const toDate = new Date(to);
-      if (!Number.isNaN(toDate.getTime())) {
-        range.$lte = toDate;
-      }
+
+    if (status && VALID_STATUS.has(status)) {
+      query.status = status;
     }
-    if (Object.keys(range).length > 0) {
-      query.completedAt = range;
+
+    if (supervisorStatusParam && SUPERVISOR_STATUS.has(supervisorStatusParam)) {
+      query.supervisorStatus = supervisorStatusParam;
     }
+
+    if (equipmentId && mongoose.isValidObjectId(equipmentId)) {
+      query.equipment = equipmentId;
+    }
+
+    if (checklistId && mongoose.isValidObjectId(checklistId)) {
+      query.checklist = checklistId;
+    }
+
+    if (roleKey === 'supervisor') {
+      query.supervisor = session.id;
+    } else if (supervisorIdParam && mongoose.isValidObjectId(supervisorIdParam)) {
+      query.supervisor = supervisorIdParam;
+    }
+
+    let technicianFilter: string | null = null;
+    if (session.role === 'tecnico') {
+      technicianFilter = String(session.id);
+    } else if (technicianIdParam && mongoose.isValidObjectId(technicianIdParam)) {
+      technicianFilter = technicianIdParam;
+    }
+
+    if (technicianFilter) {
+      query.technician = technicianFilter;
+    }
+
+    const evaluations = await Evaluation.find(query)
+      .sort({ completedAt: -1 })
+      .populate('equipment', 'code type brand model plate')
+      .populate('technician', 'name email role')
+      .populate('checklist', 'name equipmentType')
+      .populate('supervisor', 'name email phone role')
+      .lean();
+
+    return NextResponse.json(evaluations);
+  } catch (err: any) {
+    console.error('GET /api/evaluations error', err);
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
-
-  if (status && VALID_STATUS.has(status)) {
-    query.status = status;
-  }
-
-  if (equipmentId && mongoose.isValidObjectId(equipmentId)) {
-    query.equipment = equipmentId;
-  }
-
-  if (checklistId && mongoose.isValidObjectId(checklistId)) {
-    query.checklist = checklistId;
-  }
-
-  let technicianFilter: string | null = null;
-  if (session.role === 'tecnico') {
-    technicianFilter = String(session.id);
-  } else if (technicianIdParam && mongoose.isValidObjectId(technicianIdParam)) {
-    technicianFilter = technicianIdParam;
-  }
-
-  if (technicianFilter) {
-    query.technician = technicianFilter;
-  }
-
-  const evaluations = await Evaluation.find(query)
-    .sort({ completedAt: -1 })
-    .populate('equipment', 'code type brand model plate')
-    .populate('technician', 'name email role')
-    .populate('checklist', 'name equipmentType')
-    .lean();
-
-  return NextResponse.json(evaluations);
 }

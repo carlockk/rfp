@@ -90,6 +90,7 @@ export default function EvaluationForm({
   templates = [],
   techProfile = 'externo',
   checklistSkipAllowed = false,
+  supervisors = [],
   onSubmitted
 }) {
   const [checklistId, setChecklistId] = useState(checklists[0]?.id || '');
@@ -109,7 +110,7 @@ export default function EvaluationForm({
   const [availableRecipients, setAvailableRecipients] = useState([]);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
   const [shift, setShift] = useState('dia');
-  const [supervisor, setSupervisor] = useState('');
+  const [supervisorId, setSupervisorId] = useState(supervisors[0]?.id || '');
   const [info, setInfo] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -118,6 +119,8 @@ export default function EvaluationForm({
   const [evidenceError, setEvidenceError] = useState('');
   const [evidenceUploadingCount, setEvidenceUploadingCount] = useState(0);
   const evidenceUploading = evidenceUploadingCount > 0;
+  const [supervisorList, setSupervisorList] = useState(supervisors);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
 
   const startRef = useRef(new Date());
 
@@ -130,6 +133,11 @@ export default function EvaluationForm({
     [checklists]
   );
   const hasChecklists = checklists.length > 0;
+
+  const selectedSupervisor = useMemo(
+    () => supervisorList.find((item) => item.id === supervisorId) || null,
+    [supervisorList, supervisorId]
+  );
 
   const matchedTemplate = useMemo(
     () =>
@@ -199,6 +207,40 @@ export default function EvaluationForm({
     });
     setSkipChecklist(false);
   }, [matchedTemplate?.id]);
+
+  useEffect(() => {
+    if (!supervisorList.length) {
+      setSupervisorId('');
+      return;
+    }
+    const exists = supervisorList.some((item) => item.id === supervisorId);
+    if (!exists) {
+      setSupervisorId(supervisorList[0].id);
+    }
+  }, [supervisorList, supervisorId]);
+
+  useEffect(() => {
+    if (supervisors && supervisors.length) {
+      setSupervisorList(supervisors);
+      return;
+    }
+    const loadSupervisors = async () => {
+      setLoadingSupervisors(true);
+      try {
+        const res = await fetch('/api/supervisors', { cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSupervisorList(data);
+        }
+      } catch (err) {
+        console.error('No se pudieron cargar supervisores', err);
+      } finally {
+        setLoadingSupervisors(false);
+      }
+    };
+    loadSupervisors();
+  }, [supervisors]);
 
   useEffect(() => {
     if (skipChecklist || !hasChecklists) {
@@ -674,6 +716,18 @@ export default function EvaluationForm({
       return;
     }
 
+    if (!supervisorList.length) {
+      setError('No hay supervisores configurados. Contacta a un administrador.');
+      setBusy(false);
+      return;
+    }
+
+    if (!supervisorId) {
+      setError('Selecciona un supervisor para enviar la notificación.');
+      setBusy(false);
+      return;
+    }
+
     try {
       const responses = [];
       if (!effectiveSkipChecklist && selectedChecklist) {
@@ -704,7 +758,14 @@ export default function EvaluationForm({
 
       if (variant === 'candelaria') {
         responses.push({ itemKey: 'turno', value: shift, note: '' });
-        responses.push({ itemKey: 'supervisor', value: supervisor, note: '' });
+      }
+
+      if (selectedSupervisor || supervisorId) {
+        responses.push({
+          itemKey: 'supervisor_asignado',
+          value: selectedSupervisor?.name || selectedSupervisor?.email || supervisorId,
+          note: selectedSupervisor?.phone ? `Tel: ${selectedSupervisor.phone}` : ''
+        });
       }
 
       const fuelValue =
@@ -741,8 +802,11 @@ export default function EvaluationForm({
 
       if (variant === 'candelaria') {
         formData.turno = shift;
-        formData.supervisor = supervisor;
       }
+
+      formData.supervisorId = supervisorId;
+      formData.supervisorNombre = selectedSupervisor?.name || selectedSupervisor?.email || '';
+      formData.supervisorTelefono = selectedSupervisor?.phone || '';
 
       if (matchedTemplate) {
         formData.templateId = matchedTemplate.id;
@@ -760,6 +824,7 @@ export default function EvaluationForm({
       const payload = {
         checklistId: !effectiveSkipChecklist ? checklistId : undefined,
         equipmentId: equipment.id,
+        supervisorId: supervisorId || undefined,
         status,
         observations,
         anomaly: isAnomaly,
@@ -809,9 +874,9 @@ export default function EvaluationForm({
       setIsAnomaly(false);
       setAnomalyRecipients([]);
       if (variant === 'candelaria') {
-        setSupervisor('');
         setShift('dia');
       }
+      setSupervisorId(supervisorList[0]?.id || '');
       const initialAnswers = buildInitialAnswers(
         selectedChecklist?.nodes || []
       );
@@ -1030,6 +1095,42 @@ export default function EvaluationForm({
       ) : null}
 
       <div className="form-field">
+        <label className="label" htmlFor="supervisor-select">
+          Supervisor destinatario
+        </label>
+        {loadingSupervisors ? (
+          <div className="label" style={{ color: 'var(--muted)' }}>Cargando supervisores...</div>
+        ) : supervisorList.length ? (
+          <>
+            <select
+              id="supervisor-select"
+              className="input"
+              value={supervisorId}
+              onChange={(event) => setSupervisorId(event.target.value)}
+              required
+            >
+              <option value="">Selecciona...</option>
+              {supervisorList.map((sup) => (
+                <option key={sup.id} value={sup.id}>
+                  {(sup.name || sup.email || 'Supervisor')}{sup.phone ? ` - ${sup.phone}` : ''}
+                </option>
+              ))}
+            </select>
+            <span className="input-hint">
+              Se enviará una notificación de WhatsApp al teléfono del supervisor seleccionado.
+            </span>
+          </>
+        ) : (
+          <div
+            className="alert"
+            style={{ background: 'rgba(240,68,56,0.08)', borderRadius: 8, padding: 12 }}
+          >
+            No hay supervisores configurados. Contacta a un administrador.
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
         <label className="label" htmlFor="status">
           Estado general
         </label>
@@ -1048,34 +1149,20 @@ export default function EvaluationForm({
       </div>
 
       {variant === 'candelaria' ? (
-        <>
-          <div className="form-field">
-            <label className="label" htmlFor="shift">
-              Turno
-            </label>
-            <select
-              id="shift"
-              className="input"
-              value={shift}
-              onChange={(event) => setShift(event.target.value)}
-            >
-              <option value="dia">Dia</option>
-              <option value="noche">Noche</option>
-            </select>
-          </div>
-          <div className="form-field">
-            <label className="label" htmlFor="supervisor">
-              Supervisor
-            </label>
-            <input
-              id="supervisor"
-              className="input"
-              value={supervisor}
-              onChange={(event) => setSupervisor(event.target.value)}
-              placeholder="Nombre del supervisor"
-            />
-          </div>
-        </>
+        <div className="form-field">
+          <label className="label" htmlFor="shift">
+            Turno
+          </label>
+          <select
+            id="shift"
+            className="input"
+            value={shift}
+            onChange={(event) => setShift(event.target.value)}
+          >
+            <option value="dia">Dia</option>
+            <option value="noche">Noche</option>
+          </select>
+        </div>
       ) : null}
 
       <div className="form-field" style={{ gridColumn: '1 / -1' }}>

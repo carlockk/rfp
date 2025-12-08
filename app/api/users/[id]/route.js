@@ -5,7 +5,7 @@ import { dbConnect } from '@/lib/db';
 import User from '@/models/User';
 import { requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
-import { assertSafeText, isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
+import { assertSafeText, isValidEmail, isValidPassword, isValidPhone, sanitizeEmail, sanitizePhone } from '@/lib/validation';
 
 export async function PUT(req, { params }) {
   const ses = await requireRole('superadmin');
@@ -41,7 +41,7 @@ export async function PUT(req, { params }) {
     updates.email = normalizedEmail;
   }
 
-  const allowedRoles = ['superadmin', 'admin', 'tecnico'];
+  const allowedRoles = ['superadmin', 'admin', 'tecnico', 'supervisor'];
   if (payload.role) {
     if (!allowedRoles.includes(payload.role)) {
       return NextResponse.json({ error: 'Rol invalido' }, { status: 400 });
@@ -65,6 +65,14 @@ export async function PUT(req, { params }) {
     updates.password = await bcrypt.hash(payload.password, 10);
   }
 
+  if (payload.phone !== undefined) {
+    const normalizedPhone = sanitizePhone(payload.phone);
+    if (!isValidPhone(normalizedPhone)) {
+      return NextResponse.json({ error: 'Telefono invalido' }, { status: 400 });
+    }
+    updates.phone = normalizedPhone;
+  }
+
   await dbConnect();
 
   if (updates.email) {
@@ -77,6 +85,12 @@ export async function PUT(req, { params }) {
   const user = await User.findById(id);
   if (!user) {
     return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+  }
+
+  const nextRole = updates.role || user.role;
+  const nextPhone = updates.phone !== undefined ? updates.phone : user.phone;
+  if (nextRole === 'supervisor' && !isValidPhone(nextPhone)) {
+    return NextResponse.json({ error: 'Supervisor requiere un telefono valido' }, { status: 400 });
   }
 
   Object.assign(user, updates);
@@ -101,6 +115,7 @@ export async function PUT(req, { params }) {
     email: user.email,
     role: user.role,
     techProfile: user.techProfile || '',
+    phone: user.phone || '',
     createdAt: user.createdAt?.toISOString?.() || new Date().toISOString()
   });
 }

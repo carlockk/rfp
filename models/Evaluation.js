@@ -61,12 +61,24 @@ const EvaluationSchema = new mongoose.Schema({
   energyAddedKwh: { type: Number, default: null },
   adblueAddedLiters: { type: Number, default: null },
   batteryLevelBefore: { type: Number, default: null },
-  batteryLevelAfter: { type: Number, default: null }
+  batteryLevelAfter: { type: Number, default: null },
+  supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  supervisorName: { type: String, default: '' },
+  supervisorPhone: { type: String, default: '' },
+  supervisorStatus: {
+    type: String,
+    enum: ['pendiente', 'en_revision', 'aprobado', 'rechazado'],
+    default: 'pendiente'
+  },
+  supervisorNote: { type: String, default: '' },
+  supervisorStatusAt: { type: Date, default: null },
+  supervisorAssignedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 EvaluationSchema.index({ completedAt: -1 });
 EvaluationSchema.index({ equipment: 1, technician: 1, completedAt: -1 });
 EvaluationSchema.index({ equipment: 1, completedAt: -1 });
 EvaluationSchema.index({ templateId: 1, completedAt: -1 });
+EvaluationSchema.index({ supervisor: 1, completedAt: -1 });
 
 export default mongoose.models.Evaluation || mongoose.model('Evaluation', EvaluationSchema);

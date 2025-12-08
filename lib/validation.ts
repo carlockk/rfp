@@ -1,6 +1,6 @@
-const SAFE_TEXT_REGEX = /^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ\s.,:;@#'"\/\-()&+%]+$/;
+const SAFE_TEXT_REGEX = /^[A-Za-z0-9\s.,:;@#'"\/\-()&+%]+$/;
 
-export const SAFE_TEXT_PATTERN = "[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ .,:;@#'\"/\\-()&+%]+";
+export const SAFE_TEXT_PATTERN = "[A-Za-z0-9 .,:;@#'\"/\\-()&+%]+";
 
 type TextOptions = {
   minLength?: number;
@@ -67,4 +67,20 @@ export function parseNumeric(
   if (typeof min === 'number' && num < min) return null;
   if (typeof max === 'number' && num > max) return null;
   return num;
+}
+
+export function sanitizePhone(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+export function isValidPhone(
+  value: unknown,
+  { minLength = 8, maxLength = 20 }: TextOptions = {}
+): boolean {
+  if (typeof value !== 'string') return false;
+  const normalized = sanitizePhone(value);
+  if (!normalized || normalized.length < minLength || normalized.length > maxLength) return false;
+  const digits = normalized.replace(/[^0-9+]/g, '');
+  return digits.length >= minLength && digits.length <= maxLength;
 }

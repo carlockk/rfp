@@ -5,8 +5,9 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, default: '' },
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['superadmin', 'admin', 'tecnico'], default: 'tecnico' },
-  techProfile: { type: String, enum: ['externo', 'candelaria', ''], default: '' }
+  role: { type: String, enum: ['superadmin', 'admin', 'tecnico', 'supervisor'], default: 'tecnico' },
+  techProfile: { type: String, enum: ['externo', 'candelaria', ''], default: '' },
+  phone: { type: String, default: '' }
 }, { timestamps: true });
 
 export default mongoose.models.User || mongoose.model('User', UserSchema);

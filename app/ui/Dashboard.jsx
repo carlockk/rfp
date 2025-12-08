@@ -256,6 +256,10 @@ export default async function Dashboard() {
   const session = await getSession();
   if (!session) redirect('/login');
 
+  if (session.role === 'supervisor') {
+    redirect('/supervisor');
+  }
+
   if (session.role === 'tecnico') {
     const technicianId = mongoose.Types.ObjectId.isValid(session.id)
       ? new mongoose.Types.ObjectId(session.id)

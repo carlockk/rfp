@@ -18,6 +18,20 @@ const STATUS_COLORS = {
   critico: '#c62828'
 };
 
+const SUPERVISOR_STATUS_LABELS = {
+  pendiente: 'Pendiente',
+  en_revision: 'En revisión',
+  aprobado: 'Aprobado',
+  rechazado: 'Rechazado'
+};
+
+const SUPERVISOR_STATUS_COLORS = {
+  pendiente: '#607d8b',
+  en_revision: '#1565c0',
+  aprobado: '#2e7d32',
+  rechazado: '#c62828'
+};
+
 const formatDateTime = (value) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -444,6 +458,10 @@ export default function HistoryDashboard({
       version: item.checklistVersion || '-',
       equipo: item.equipment?.code || '-',
       tecnico: item.technician?.name || item.technician?.email || '-',
+      supervisor: item.supervisor?.name || item.supervisorName || '-',
+      estadoSupervisor: SUPERVISOR_STATUS_LABELS[item.supervisorStatus] || item.supervisorStatus || '-',
+      fechaEstadoSupervisor: formatDateTime(item.supervisorStatusAt),
+      notaSupervisor: item.supervisorNote || '',
       estado: STATUS_LABELS[item.status] || item.status,
       duracion: formatDuration(item.durationSeconds),
       observaciones: item.observations || '',
@@ -774,6 +792,7 @@ export default function HistoryDashboard({
               <th>Version</th>
               <th>Equipo</th>
               <th>Operador</th>
+              <th>Supervisor</th>
               <th>Estado</th>
               <th>Duracion</th>
               <th>Fotos</th>
@@ -788,6 +807,28 @@ export default function HistoryDashboard({
                 <td>{item.checklistVersion || '-'}</td>
                 <td>{item.equipment?.code || '-'}</td>
                 <td>{item.technician?.name || item.technician?.email || '-'}</td>
+                <td>
+                  <div>{item.supervisor?.name || item.supervisorName || '-'}</div>
+                  <div>
+                    <span
+                      style={{
+                        background: `${(SUPERVISOR_STATUS_COLORS[item.supervisorStatus] || '#607d8b')}22`,
+                        color: SUPERVISOR_STATUS_COLORS[item.supervisorStatus] || '#607d8b',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        fontSize: 12
+                      }}
+                    >
+                      {SUPERVISOR_STATUS_LABELS[item.supervisorStatus] || item.supervisorStatus || '-'}
+                    </span>
+                  </div>
+                  <div className="label">{formatDateTime(item.supervisorStatusAt)}</div>
+                  {item.supervisorNote ? (
+                    <div className="label" style={{ color: 'var(--danger)' }}>
+                      Nota: {item.supervisorNote}
+                    </div>
+                  ) : null}
+                </td>
                 <td>
                   <span
                     style={{
@@ -852,7 +893,7 @@ export default function HistoryDashboard({
             )) : null}
             {!evaluations.length ? (
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
+                <td colSpan={10} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
                   No hay evaluaciones para los filtros seleccionados.
                 </td>
               </tr>

@@ -7,6 +7,7 @@ import Checklist from '@/models/Checklist';
 import { serializeChecklist } from '@/lib/checklists';
 import EvaluationTemplate from '@/models/EvaluationTemplate';
 import { normalizeTemplateDoc } from '@/lib/evaluationTemplates';
+import User from '@/models/User';
 import BackButton from '@/app/ui/BackButton';
 import EvaluationEntry from './ui/EvaluationEntry';
 
@@ -126,6 +127,16 @@ export default async function Page({ params }) {
 
   const templates = templateDocs.map((doc) => normalizeTemplateDoc(doc));
 
+  const supervisorDocs = await User.find({ role: 'supervisor' }, { name: 1, email: 1, phone: 1 })
+    .sort({ name: 1 })
+    .lean();
+  const supervisors = supervisorDocs.map((sup) => ({
+    id: sup._id.toString(),
+    name: sup.name || '',
+    email: sup.email || '',
+    phone: sup.phone || ''
+  }));
+
   return (
     <EvaluationEntry
       equipment={equipment}
@@ -135,6 +146,7 @@ export default async function Page({ params }) {
       checklists={checklists}
       sessionRole={session.role}
       templates={templates}
+      supervisors={supervisors}
     />
   );
 }

@@ -5,20 +5,22 @@ import SlidingPanel from '../../../ui/SlidingPanel';
 import BackButton from '../../../ui/BackButton';
 import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
 import PaginationControls from '../../../ui/PaginationControls';
-import { assertSafeText, SAFE_TEXT_PATTERN } from '@/lib/validation';
+import { assertSafeText, isValidPhone, sanitizePhone } from '@/lib/validation';
 
 const defaultForm = {
   name: '',
   email: '',
   password: '',
   role: 'tecnico',
-  techProfile: 'externo'
+  techProfile: 'externo',
+  phone: ''
 };
 
 const roleLabels = {
   superadmin: 'Super admin',
   admin: 'Admin',
-  tecnico: 'Operador'
+  tecnico: 'Operador',
+  supervisor: 'Supervisor'
 };
 
 const profileLabels = {
@@ -44,10 +46,10 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
   const [editingId, setEditingId] = useState('');
   const [page, setPage] = useState(1);
 
-  const availableRoles = useMemo(
-    () => (canManageSuperadmin ? ['tecnico', 'admin', 'superadmin'] : ['tecnico', 'admin']),
-    [canManageSuperadmin]
-  );
+  const availableRoles = useMemo(() => {
+    const base = ['tecnico', 'admin', 'supervisor'];
+    return canManageSuperadmin ? [...base, 'superadmin'] : base;
+  }, [canManageSuperadmin]);
 
   const techProfiles = useMemo(() => ['externo', 'candelaria'], []);
 
@@ -120,7 +122,8 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
       email: user.email || '',
       password: '',
       role: user.role || 'tecnico',
-      techProfile: user.techProfile || (user.role === 'tecnico' ? 'externo' : '')
+      techProfile: user.techProfile || (user.role === 'tecnico' ? 'externo' : ''),
+      phone: user.phone || ''
     });
     setError('');
     setSuccess('');
@@ -158,13 +161,21 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
       return;
     }
 
+    const normalizedPhone = sanitizePhone(form.phone);
+    if (form.role === 'supervisor' && !isValidPhone(normalizedPhone)) {
+      setError('El telefono es obligatorio para supervisores (8 a 20 caracteres numericos o +).');
+      setSaving(false);
+      return;
+    }
+
     try {
       const payload = {
         name: normalizedName,
         email: form.email,
         role: form.role,
         techProfile: form.role === 'tecnico' ? form.techProfile : '',
-        password: form.password || undefined
+        password: form.password || undefined,
+        phone: form.role === 'supervisor' ? normalizedPhone : form.phone || ''
       };
 
       const res = await fetch(isEditing ? `/api/users/${editingId}` : '/api/users', {
@@ -238,6 +249,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
             <tr>
               <th>Nombre</th>
               <th>Email</th>
+              <th>Telefono</th>
               <th>Rol</th>
               <th>Perfil</th>
               <th>Creado</th>
@@ -249,6 +261,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
               <tr key={user.id}>
                 <td>{user.name || '-'}</td>
                 <td>{user.email}</td>
+                <td>{user.phone || '-'}</td>
                 <td>{roleLabels[user.role] || user.role}</td>
                 <td>{profileLabels[user.techProfile] || '-'}</td>
                 <td>{user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'}</td>
@@ -298,7 +311,6 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
               required
               minLength={2}
               maxLength={80}
-              pattern={SAFE_TEXT_PATTERN}
               title="Solo letras, numeros y puntuacion basica"
             />
           </div>
@@ -346,6 +358,20 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="form-field">
+            <label className="label" htmlFor="phone">
+              Telefono {form.role === 'supervisor' ? '(obligatorio)' : '(opcional)'}
+            </label>
+            <input
+              id="phone"
+              className="input"
+              value={form.phone}
+              onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+              placeholder="+56 9 1234 5678"
+              title="Ingresa un telefono de 8 a 20 caracteres"
+              required={form.role === 'supervisor'}
+            />
           </div>
           {form.role === 'tecnico' ? (
             <div className="form-field">

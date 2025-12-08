@@ -17,6 +17,7 @@ export default async function Page() {
     email: u.email,
     role: u.role,
     techProfile: u.techProfile || '',
+    phone: u.phone || '',
     createdAt: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString()
   }));
 

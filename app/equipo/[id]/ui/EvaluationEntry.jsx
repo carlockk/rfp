@@ -45,6 +45,7 @@ export default function EvaluationEntry({
   checklists = [],
   sessionRole,
   templates = [],
+  supervisors = [],
   showBackButton = true
 }) {
   const variant = techProfile === 'candelaria' ? 'candelaria' : 'externo';
@@ -192,6 +193,7 @@ export default function EvaluationEntry({
             templates={templates}
             techProfile={techProfile}
             checklistSkipAllowed={allowChecklistSkip}
+            supervisors={supervisors}
             onSubmitted={() => setFeedback('Evaluación enviada. Si estabas sin conexión se sincronizará automáticamente.')}
           />
         ) : technicianEquipments.length ? (
