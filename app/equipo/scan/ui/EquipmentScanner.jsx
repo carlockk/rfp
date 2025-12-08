@@ -23,7 +23,13 @@ function normalizeEquipment(equipment) {
   };
 }
 
-export default function EquipmentScanner({ assignedEquipments, checklists, techProfile, templates = [] }) {
+export default function EquipmentScanner({
+  assignedEquipments,
+  checklists,
+  techProfile,
+  templates = [],
+  sessionRole = 'tecnico'
+}) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const detectorRef = useRef(null);
@@ -41,6 +47,12 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
   const [assignedToCurrent, setAssignedToCurrent] = useState(false);
   const [showMobileHint, setShowMobileHint] = useState(false);
   const [deeplinkUrl, setDeeplinkUrl] = useState('');
+  const isSupervisor = sessionRole === 'supervisor';
+  const headerTitle = isSupervisor ? 'Modo operador (supervisor)' : 'Panel del operador';
+  const subtitle = isSupervisor
+    ? 'Escanea o selecciona equipos para registrar checklists como operador.'
+    : 'Escanea el c¢digo de la m quina para iniciar la evaluaci¢n, o selecciona uno de tus equipos asignados.';
+  const assignedLabel = isSupervisor ? 'Equipos disponibles' : 'Tus equipos asignados';
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -232,13 +244,13 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
       <div className="page-header">
         <div className="page-header__left">
           <div className="page-header__titles">
-            <p className="page-header__eyebrow">Panel del operador</p>
+            <p className="page-header__eyebrow">{headerTitle}</p>
             <h1 className="page-header__title">Escanear equipo por QR</h1>
           </div>
         </div>
       </div>
       <p className="page-header__subtitle">
-        Escanea el código de la máquina para iniciar la evaluación, o selecciona uno de tus equipos asignados.
+        {subtitle}
       </p>
 
       <div className="card" style={{ marginBottom: 24 }}>
@@ -323,10 +335,12 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
           </form>
 
           <div>
-            <p className="label" style={{ marginBottom: 8 }}>Tus equipos asignados</p>
+            <p className="label" style={{ marginBottom: 8 }}>{assignedLabel}</p>
             {assignedEquipments.length === 0 ? (
               <div style={{ color: 'var(--muted)' }}>
-                Aún no se te han asignado equipos. Contacta a un administrador.
+                {isSupervisor
+                  ? 'No hay equipos disponibles para seleccionar manualmente.'
+                  : 'Aún no se te han asignado equipos. Contacta a un administrador.'}
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
@@ -354,16 +368,16 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
       {loading ? <div>Cargando equipo...</div> : null}
 
       {selectedEquipment ? (
-        <EvaluationEntry
-          equipment={selectedEquipment}
-          assignedEquipments={assignedEquipments}
-          assignedToUser={assignedToCurrent}
-          techProfile={techProfile}
-          checklists={checklists}
-          sessionRole="tecnico"
-          templates={templates}
-          showBackButton={false}
-        />
+          <EvaluationEntry
+            equipment={selectedEquipment}
+            assignedEquipments={assignedEquipments}
+            assignedToUser={assignedToCurrent}
+            techProfile={techProfile}
+            checklists={checklists}
+            sessionRole={sessionRole}
+            templates={templates}
+            showBackButton={false}
+          />
       ) : (
         <div className="card">
           <p style={{ marginBottom: 12 }}>
@@ -423,5 +437,6 @@ export default function EquipmentScanner({ assignedEquipments, checklists, techP
     </div>
   );
 }
+
 
 

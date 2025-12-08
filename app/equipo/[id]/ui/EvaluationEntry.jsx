@@ -139,7 +139,7 @@ export default function EvaluationEntry({
   const hasMandatoryChecklist = filteredChecklists.some((item) => item.isMandatory);
   const allowChecklistSkip = filteredChecklists.length === 0 || !hasMandatoryChecklist;
 
-  const canEvaluate = sessionRole === 'tecnico';
+  const canEvaluate = sessionRole === 'tecnico' || sessionRole === 'supervisor';
 
   function handleSelect(id) {
     setActiveEquipmentId(id);

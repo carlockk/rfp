@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import Equipment from '@/models/Equipment';
+import Evaluation from '@/models/Evaluation';
 import Checklist from '@/models/Checklist';
 import { serializeChecklist } from '@/lib/checklists';
 import EvaluationTemplate from '@/models/EvaluationTemplate';
@@ -16,7 +17,10 @@ export default async function Page() {
     redirect('/login');
   }
 
-  if (session.role !== 'tecnico') {
+  const isTechnician = session.role === 'tecnico';
+  const isSupervisor = session.role === 'supervisor';
+
+  if (!isTechnician && !isSupervisor) {
     redirect('/');
   }
 
@@ -24,13 +28,15 @@ export default async function Page() {
     ? new mongoose.Types.ObjectId(session.id)
     : session.id;
 
-  const assignedDocs = await Equipment.find({
+  const equipmentQuery = {
     isActive: true,
     $or: [
       { assignedTo: technicianId },
       { operators: { $elemMatch: { user: technicianId } } }
     ]
-  })
+  };
+
+  const assignedDocs = await Equipment.find(equipmentQuery)
     .select('code type brand model plate fuel adblue notes operators')
     .sort({ code: 1 })
     .lean();
@@ -94,6 +100,7 @@ export default async function Page() {
       checklists={checklists}
       techProfile={session.techProfile || 'externo'}
       templates={templates}
+      sessionRole={session.role}
     />
   );
 }

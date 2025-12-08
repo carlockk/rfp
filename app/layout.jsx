@@ -31,7 +31,9 @@ export default async function RootLayout({ children }) {
         ]
       : session?.role === 'supervisor'
         ? [
-            { href: '/supervisor', label: 'Checklists asignados' }
+            { href: '/supervisor', label: 'Checklists asignados' },
+            { href: '/supervisor/operador', label: 'Modo operador' },
+            { href: '/equipo/scan', label: 'Escanear QR' }
           ]
       : [
           { href: '/', label: 'Dashboard' },

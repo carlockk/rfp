@@ -54,18 +54,20 @@ export default async function Page({ params }) {
     }))
   };
 
+  const isOperatorRole = session.role === 'tecnico' || session.role === 'supervisor';
+
   const assignedToUser =
-    session.role !== 'tecnico'
+    !isOperatorRole
       ? true
       : operatorUserIds.includes(session.id) ||
         (equipmentDoc.assignedTo && equipmentDoc.assignedTo.toString() === session.id);
 
-  if (session.role === 'tecnico' && !assignedToUser) {
+  if (isOperatorRole && !assignedToUser) {
     redirect('/equipo/scan');
   }
 
   let assignedEquipments = [];
-  if (session.role === 'tecnico' && session.id) {
+  if (isOperatorRole && session.id) {
     const technicianId = mongoose.Types.ObjectId.isValid(session.id)
       ? new mongoose.Types.ObjectId(session.id)
       : session.id;
