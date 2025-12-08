@@ -87,7 +87,7 @@ export default function LoginPage() {
       {/* Barra superior */}
       <div className="login-topbar" aria-live="polite">
         <div className="login-topbar__left">
-          <span className="login-topbar__title">Control de flotas</span>
+          <span className="login-topbar__title">Logística</span>
         </div>
         <div className="login-topbar__right">
           <span className="login-topbar__date">{dateStr}</span>
@@ -108,7 +108,7 @@ export default function LoginPage() {
             style={{ borderRadius: '50%' }}
           />
           <span className="login-panel__brand">R F P</span>
-          <span className="login-panel__brand">Control de flotas</span>
+          <span className="login-panel__brand">Logística</span>
           <h1 className="login-panel__title">Iniciar sesión</h1>
         </div>
 

@@ -55,7 +55,11 @@ export async function PUT(req: Request, { params }: { params?: { id?: string } }
   }
 
   if (role === 'supervisor') {
-    if (evaluation.supervisor && evaluation.supervisor.toString() !== String(session.id)) {
+    const supervisorId = (evaluation.supervisor as any)?._id || evaluation.supervisor;
+    const matchesSupervisor = supervisorId
+      ? String(supervisorId) === String(session.id)
+      : false;
+    if (evaluation.supervisor && !matchesSupervisor) {
       return NextResponse.json({ error: 'No autorizado para esta evaluacion' }, { status: 403 });
     }
     if (!evaluation.supervisor) {

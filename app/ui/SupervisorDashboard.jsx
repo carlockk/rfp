@@ -40,29 +40,158 @@ const formatAnswerValue = (value) => {
   return String(value);
 };
 
-const buildAnswers = (item) => {
+const flattenChecklistNodes = (checklist) => {
+  if (!checklist || typeof checklist !== 'object') return [];
+
+  let nodes = [];
+
+  if (Array.isArray(checklist.nodes)) {
+    nodes = checklist.nodes;
+  } else if (checklist.structure && Array.isArray(checklist.structure.nodes)) {
+    nodes = checklist.structure.nodes;
+  } else if (Array.isArray(checklist.versions) && checklist.versions.length) {
+    const currentVersion = checklist.currentVersion;
+    const versionObj =
+      checklist.versions.find((v) => v.version === currentVersion) ||
+      checklist.versions[0];
+    if (Array.isArray(versionObj?.nodes)) {
+      nodes = versionObj.nodes;
+    }
+  }
+
+  const result = [];
+  const visit = (arr) => {
+    arr.forEach((node) => {
+      if (!node || typeof node !== 'object') return;
+      result.push(node);
+      if (Array.isArray(node.children) && node.children.length) {
+        visit(node.children);
+      }
+      if (Array.isArray(node.items) && node.items.length) {
+        visit(node.items);
+      }
+    });
+  };
+
+  visit(nodes);
+  return result;
+};
+
+const buildChecklistQuestionMap = (checklistStructures) => {
+  const outerMap = new Map();
+
+  (checklistStructures || []).forEach((checklist) => {
+    const id =
+      checklist.id ||
+      (checklist._id && checklist._id.toString ? checklist._id.toString() : checklist._id);
+    if (!id) return;
+
+    const nodes = flattenChecklistNodes(checklist);
+    const innerMap = new Map();
+
+    nodes.forEach((node) => {
+      const key = node.key || node.id;
+      if (!key) return;
+      const label =
+        node.label ||
+        node.title ||
+        node.text ||
+        node.name ||
+        node.placeholder ||
+        key;
+      innerMap.set(key, label);
+    });
+
+    if (innerMap.size) {
+      outerMap.set(id, innerMap);
+    }
+  });
+
+  return outerMap;
+};
+
+const flattenTemplateFieldsClient = (fields = []) => {
+  const result = [];
+  fields.forEach((field) => {
+    if (!field || typeof field !== 'object') return;
+    result.push(field);
+    if (Array.isArray(field.children) && field.children.length) {
+      result.push(...flattenTemplateFieldsClient(field.children));
+    }
+  });
+  return result;
+};
+
+const resolveFieldLabel = (field, fallbackKey) => {
+  if (!field || typeof field !== 'object') return fallbackKey;
+  return (
+    field.label ||
+    field.title ||
+    field.name ||
+    field.text ||
+    field.placeholder ||
+    field.key ||
+    fallbackKey
+  );
+};
+
+const buildAnswersFromEvaluation = (item, checklistQuestionMap) => {
   const answers = [];
+
+  const templateFields = Array.isArray(item.templateFields)
+    ? flattenTemplateFieldsClient(item.templateFields)
+    : [];
+  const templateFieldMap = new Map(
+    templateFields
+      .map((field) => {
+        const key = typeof field?.key === 'string' ? field.key : '';
+        return key ? [key, field] : null;
+      })
+      .filter(Boolean)
+  );
+
+  const checklistIdRaw =
+    item.checklist?._id?.toString?.() ||
+    item.checklist?._id ||
+    item.checklistId ||
+    '';
+  const checklistQuestions =
+    checklistIdRaw && checklistQuestionMap
+      ? checklistQuestionMap.get(checklistIdRaw)
+      : null;
+
+  const resolveLabelFromAnySource = (itemKey) => {
+    if (!itemKey) return '';
+    const templateField = templateFieldMap.get(itemKey);
+    if (templateField) return resolveFieldLabel(templateField, itemKey);
+    if (checklistQuestions && checklistQuestions.has(itemKey)) {
+      return checklistQuestions.get(itemKey) || itemKey;
+    }
+    return itemKey;
+  };
+
   if (Array.isArray(item.responses) && item.responses.length) {
     item.responses.forEach((res) => {
-      const key = typeof res?.itemKey === 'string' ? res.itemKey : '';
-      if (!key) return;
+      const itemKey = typeof res?.itemKey === 'string' ? res.itemKey : '';
+      if (!itemKey) return;
+      const label = resolveLabelFromAnySource(itemKey);
       answers.push({
-        label: key,
+        label,
         value: formatAnswerValue(res.value),
         note: typeof res.note === 'string' ? res.note : ''
       });
     });
-    return answers;
+  } else if (item.formData && typeof item.formData === 'object') {
+    Object.entries(item.formData).forEach(([key, value]) => {
+      const label = resolveLabelFromAnySource(key);
+      answers.push({
+        label,
+        value: formatAnswerValue(value),
+        note: ''
+      });
+    });
   }
 
-  const source = item.formData && typeof item.formData === 'object' ? item.formData : {};
-  Object.entries(source).forEach(([key, value]) => {
-    answers.push({
-      label: key,
-      value: formatAnswerValue(value),
-      note: ''
-    });
-  });
   return answers;
 };
 
@@ -73,6 +202,13 @@ export default function SupervisorDashboard() {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [preview, setPreview] = useState(null);
+  const [checklistStructures, setChecklistStructures] = useState([]);
+  const [info, setInfo] = useState('');
+
+  const checklistQuestionMap = useMemo(
+    () => buildChecklistQuestionMap(checklistStructures),
+    [checklistStructures]
+  );
 
   const filteredItems = useMemo(() => {
     if (!statusFilter) return items;
@@ -87,6 +223,7 @@ export default function SupervisorDashboard() {
   async function fetchEvaluations() {
     setLoading(true);
     setError('');
+    setInfo('');
     try {
       const params = new URLSearchParams();
       if (statusFilter) params.set('supervisorStatus', statusFilter);
@@ -115,6 +252,22 @@ export default function SupervisorDashboard() {
   }, []);
 
   useEffect(() => {
+    const loadChecklists = async () => {
+      try {
+        const res = await fetch('/api/checklists?includeStructure=true&includeInactive=true', {
+          cache: 'no-store'
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setChecklistStructures(Array.isArray(data) ? data : []);
+      } catch {
+        setChecklistStructures([]);
+      }
+    };
+    loadChecklists();
+  }, []);
+
+  useEffect(() => {
     setPage(1);
   }, [filteredItems.length]);
 
@@ -133,6 +286,8 @@ export default function SupervisorDashboard() {
       });
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
+      const statusLabel = SUPERVISOR_LABELS[status] || status;
+      setInfo(`${statusLabel} con éxito`);
       setItems((prev) =>
         prev.map((item) =>
           (item._id?.toString?.() || item._id) === id
@@ -148,6 +303,7 @@ export default function SupervisorDashboard() {
       setError('');
     } catch (err) {
       setError(err.message || 'No se pudo actualizar el estado');
+      setInfo('');
     }
   };
 
@@ -184,6 +340,7 @@ export default function SupervisorDashboard() {
         <div className="label">
           Resultados: <strong>{filteredItems.length}</strong>
         </div>
+        {info ? <div style={{ color: 'var(--accent)' }}>{info}</div> : null}
         {error ? <div style={{ color: 'var(--danger)' }}>{error}</div> : null}
       </div>
 
@@ -204,7 +361,7 @@ export default function SupervisorDashboard() {
             {pagedItems.map((item) => {
               const id = item._id?.toString?.() || item._id;
               const supStatus = item.supervisorStatus || 'pendiente';
-              const answers = buildAnswers(item);
+              const answers = buildAnswersFromEvaluation(item, checklistQuestionMap);
               return (
                 <tr key={id}>
                   <td>{formatDateTime(item.completedAt)}</td>
