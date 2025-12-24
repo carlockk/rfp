@@ -7,8 +7,10 @@ import Equipment from '@/models/Equipment';
 import EvaluationTemplate from '@/models/EvaluationTemplate';
 import Notification from '@/models/Notification';
 import PushSubscription from '@/models/PushSubscription';
+import FcmToken from '@/models/FcmToken';
 import User from '@/models/User';
 import { broadcastPush, isPushAvailable } from '@/lib/push';
+import { isFcmAvailable, sendFcmToTokens } from '@/lib/fcm';
 import { getSession } from '@/lib/auth';
 import { requirePermission } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
@@ -518,6 +520,23 @@ export async function POST(req: NextRequest) {
       message: `Tienes un checklist para revisar del equipo ${equipment.code}${contextName ? ` (${contextName})` : ''}.`
     });
     console.log('[whatsapp] aviso supervisor', supervisorLabel);
+
+    if (isFcmAvailable()) {
+      const tokens = await FcmToken.find({ user: supervisorUser._id })
+        .select('token')
+        .lean<Array<{ token: string }>>();
+      const tokenValues = tokens.map((item) => item.token).filter(Boolean);
+      if (tokenValues.length) {
+        await sendFcmToTokens(tokenValues, {
+          title: 'Nueva evaluacion asignada',
+          body: `${equipment.code}${contextName ? ` - ${contextName}` : ''}`,
+          data: {
+            url: '/supervisor',
+            evaluationId: evaluation._id.toString()
+          }
+        });
+      }
+    }
   }
 
 

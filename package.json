@@ -13,6 +13,7 @@
     "bcryptjs": "2.4.3",
     "cloudinary": "1.41.3",
     "date-fns": "^3.6.0",
+    "firebase-admin": "^13.0.2",
     "idb": "^8.0.3",
     "jsonwebtoken": "9.0.2",
     "lucide-react": "^0.553.0",
