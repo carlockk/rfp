@@ -8,7 +8,11 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (!session?.role || !['tecnico', 'admin', 'superadmin'].includes(session.role)) {
+  const role =
+    session && typeof session === 'object' && 'role' in session
+      ? String((session as { role?: string }).role || '')
+      : '';
+  if (!role || !['tecnico', 'admin', 'superadmin'].includes(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
