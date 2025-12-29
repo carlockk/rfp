@@ -31,10 +31,11 @@ Plataforma web para administrar flotas (grúas, ramplas, camionetas, etc.), asig
 - **Sincronización offline**: banner y manager de tareas que indican cuándo hay evaluaciones pendientes por enviar.
 
 ## Stack
-- **Next.js 14 (App Router)** con React 18, Suspense y rutas protegidas vía middleware.
-- **MongoDB + Mongoose** (Atlas recomendado).
+- **Next.js (App Router)** con React, Suspense y rutas protegidas vía middleware.
+- **MongoDB + Mongoose** (Atlas).
 - **JWT** con cookies httpOnly para sesiones.
 - **Cloudinary** para almacenamiento de fotos y evidencias.
+- **Uptime Robots** para la carga rápida de contenido.
 - **Service Worker / PWA** (next-pwa) para soportar trabajo offline.
 
 
