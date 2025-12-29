@@ -406,14 +406,6 @@ export async function POST(req: NextRequest) {
 
   const templateMetrics = extractTemplateMetrics(templateFields, templateValues);
 
-  let previousEvaluation: { hourmeterCurrent?: number | null; odometerCurrent?: number | null } | null = null;
-  if (templateMetrics.hourmeterCurrent != null || templateMetrics.odometerCurrent != null) {
-    previousEvaluation = await Evaluation.findOne({ equipment: equipment._id })
-      .sort({ completedAt: -1 })
-      .select('hourmeterCurrent odometerCurrent completedAt')
-      .lean();
-  }
-
   const templateRef =
     templateDoc?._id ?? (templateIdRaw && mongoose.isValidObjectId(templateIdRaw) ? templateIdRaw : undefined);
 
@@ -493,16 +485,26 @@ export async function POST(req: NextRequest) {
     }
   });
 
-  if (templateMetrics.hourmeterCurrent != null && previousEvaluation?.hourmeterCurrent != null) {
-    const delta = templateMetrics.hourmeterCurrent - previousEvaluation.hourmeterCurrent;
+  let previousEvaluation: { hourmeterCurrent?: number | null; odometerCurrent?: number | null } | null = null;
+  const currentHourmeter = evaluationData.hourmeterCurrent;
+  const currentOdometer = evaluationData.odometerCurrent;
+  if (currentHourmeter != null || currentOdometer != null) {
+    previousEvaluation = await Evaluation.findOne({ equipment: equipment._id })
+      .sort({ completedAt: -1 })
+      .select('hourmeterCurrent odometerCurrent completedAt')
+      .lean();
+  }
+
+  if (currentHourmeter != null && previousEvaluation?.hourmeterCurrent != null) {
+    const delta = currentHourmeter - previousEvaluation.hourmeterCurrent;
     if (Number.isFinite(delta) && delta >= 0) {
       evaluationData.hourmeterPrevious = previousEvaluation.hourmeterCurrent;
       evaluationData.hourmeterDelta = delta;
     }
   }
 
-  if (templateMetrics.odometerCurrent != null && previousEvaluation?.odometerCurrent != null) {
-    const delta = templateMetrics.odometerCurrent - previousEvaluation.odometerCurrent;
+  if (currentOdometer != null && previousEvaluation?.odometerCurrent != null) {
+    const delta = currentOdometer - previousEvaluation.odometerCurrent;
     if (Number.isFinite(delta) && delta >= 0) {
       evaluationData.odometerPrevious = previousEvaluation.odometerCurrent;
       evaluationData.odometerDelta = delta;

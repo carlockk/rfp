@@ -137,7 +137,7 @@ const formatAnswerValue = (value) => {
 };
 
 /**
- * Aplana los nodos de un checklist (versión actual) en un array plano.
+ * Aplana los nodos de un checklist en un array plano.
  */
 const flattenChecklistNodes = (checklist) => {
   if (!checklist || typeof checklist !== 'object') return [];
@@ -215,7 +215,7 @@ const buildChecklistQuestionMap = (checklistStructures) => {
 const buildAnswersFromEvaluation = (item, checklistQuestionMap) => {
   const answers = [];
 
-  // Template fields (para plantillas genéricas)
+  // Template fields para plantillas genéricas
   const templateFields = Array.isArray(item.templateFields)
     ? flattenTemplateFieldsClient(item.templateFields)
     : [];
@@ -433,7 +433,7 @@ export default function HistoryDashboard({
         const data = await res.json();
         setChecklistStructures(Array.isArray(data) ? data : []);
       } catch {
-        // si falla, no rompemos nada: sólo no tendremos labels bonitos
+        // si falla, no rompe nada: sólo no tendra labels bonitos
       }
     };
     loadChecklists();

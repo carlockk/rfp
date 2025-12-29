@@ -40,6 +40,13 @@ const formatAnswerValue = (value) => {
   return String(value);
 };
 
+const formatMetric = (value) => {
+  if (value === null || value === undefined) return '-';
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num)) return '-';
+  return num.toLocaleString('es-CL', { maximumFractionDigits: 1 });
+};
+
 const flattenChecklistNodes = (checklist) => {
   if (!checklist || typeof checklist !== 'object') return [];
 
@@ -353,6 +360,10 @@ export default function SupervisorDashboard() {
               <th>Checklist</th>
               <th>Operador</th>
               <th>Estado</th>
+              <th>Horometro</th>
+              <th>Delta horometro</th>
+              <th>Odometro</th>
+              <th>Delta odometro</th>
               <th>Supervisor</th>
               <th>Acciones</th>
             </tr>
@@ -380,6 +391,10 @@ export default function SupervisorDashboard() {
                           answers,
                           status: STATUS_LABELS[item.status] || item.status,
                           observations: item.observations || '',
+                          hourmeterCurrent: item.hourmeterCurrent ?? null,
+                          hourmeterDelta: item.hourmeterDelta ?? null,
+                          odometerCurrent: item.odometerCurrent ?? null,
+                          odometerDelta: item.odometerDelta ?? null,
                           supervisorStatus: SUPERVISOR_LABELS[item.supervisorStatus] || item.supervisorStatus || '-',
                           supervisorNote: item.supervisorNote || ''
                         })
@@ -390,6 +405,10 @@ export default function SupervisorDashboard() {
                   </td>
                   <td>{item.technician?.name || item.technician?.email || '-'}</td>
                   <td>{STATUS_LABELS[item.status] || item.status}</td>
+                  <td>{formatMetric(item.hourmeterCurrent)}</td>
+                  <td>{formatMetric(item.hourmeterDelta)}</td>
+                  <td>{formatMetric(item.odometerCurrent)}</td>
+                  <td>{formatMetric(item.odometerDelta)}</td>
                   <td>
                     <span
                       style={{
@@ -428,7 +447,7 @@ export default function SupervisorDashboard() {
             })}
             {!pagedItems.length ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
+                <td colSpan={11} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
                   No hay checklists asignados para mostrar.
                 </td>
               </tr>
@@ -458,6 +477,12 @@ export default function SupervisorDashboard() {
                 <strong>Estado operador:</strong> {preview.status} |{' '}
                 <strong>Estado supervisor:</strong> {preview.supervisorStatus}{' '}
                 {preview.supervisorNote ? `(Nota: ${preview.supervisorNote})` : ''}
+              </p>
+              <p className="label" style={{ fontSize: 13 }}>
+                <strong>Horometro:</strong> {formatMetric(preview.hourmeterCurrent)}{' '}
+                <strong>Delta horometro:</strong> {formatMetric(preview.hourmeterDelta)}{' '}
+                <strong>Odometro:</strong> {formatMetric(preview.odometerCurrent)}{' '}
+                <strong>Delta odometro:</strong> {formatMetric(preview.odometerDelta)}
               </p>
               {preview.observations ? (
                 <p className="label"><strong>Observaciones:</strong> {preview.observations}</p>
