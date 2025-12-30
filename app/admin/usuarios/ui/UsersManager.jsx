@@ -5,7 +5,7 @@ import SlidingPanel from '../../../ui/SlidingPanel';
 import BackButton from '../../../ui/BackButton';
 import { getOperatorProfileLabel } from '@/lib/operatorProfiles';
 import PaginationControls from '../../../ui/PaginationControls';
-import { assertSafeText, isValidPhone, sanitizePhone } from '@/lib/validation';
+import { assertSafeText, isValidLoginId, isValidPhone, sanitizeLoginId, sanitizePhone } from '@/lib/validation';
 
 const defaultForm = {
   name: '',
@@ -149,6 +149,13 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
       return;
     }
 
+    const normalizedLoginId = sanitizeLoginId(form.email);
+    if (!isValidLoginId(normalizedLoginId)) {
+      setError('Usuario o correo invalido. Usa un correo o un usuario sin espacios.');
+      setSaving(false);
+      return;
+    }
+
     if (!isEditing && form.password.length < 6) {
       setError('La contrasena debe tener al menos 6 caracteres');
       setSaving(false);
@@ -171,7 +178,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
     try {
       const payload = {
         name: normalizedName,
-        email: form.email,
+        email: normalizedLoginId,
         role: form.role,
         techProfile: form.role === 'tecnico' ? form.techProfile : '',
         password: form.password || undefined,
@@ -248,7 +255,7 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
           <thead>
             <tr>
               <th>Nombre</th>
-              <th>Email</th>
+              <th>Usuario/correo</th>
               <th>Telefono</th>
               <th>Rol</th>
               <th>Perfil</th>
@@ -315,11 +322,11 @@ export default function UsersManager({ initialUsers, canManageSuperadmin }) {
             />
           </div>
           <div className="form-field">
-            <label className="label" htmlFor="email">Email</label>
+            <label className="label" htmlFor="email">Usuario o correo</label>
             <input
               id="email"
               className="input"
-              type="email"
+              type="text"
               required
               value={form.email}
               onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}

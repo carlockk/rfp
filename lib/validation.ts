@@ -39,11 +39,24 @@ export function sanitizeEmail(value: unknown): string {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_REGEX = /^[a-z0-9][a-z0-9._-]{2,119}$/;
 
 export function isValidEmail(value: unknown): boolean {
   const email = sanitizeEmail(value);
   if (!email || email.length > 120) return false;
   return EMAIL_REGEX.test(email);
+}
+
+export function sanitizeLoginId(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+export function isValidLoginId(value: unknown): boolean {
+  const loginId = sanitizeLoginId(value);
+  if (!loginId || loginId.length > 120) return false;
+  if (EMAIL_REGEX.test(loginId)) return true;
+  return USERNAME_REGEX.test(loginId);
 }
 
 export function isValidPassword(

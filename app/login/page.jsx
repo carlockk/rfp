@@ -4,10 +4,10 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import flotaLogo from '@/public/log.png';
-import { isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
+import { isValidLoginId, isValidPassword, sanitizeLoginId } from '@/lib/validation';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
@@ -51,9 +51,9 @@ export default function LoginPage() {
     setLoading(true);
     setMessage('Autenticando...');
 
-    const normalizedEmail = sanitizeEmail(email);
-    if (!isValidEmail(normalizedEmail)) {
-      setMessage('Ingresa un email válido.');
+    const normalizedLoginId = sanitizeLoginId(loginId);
+    if (!isValidLoginId(normalizedLoginId)) {
+      setMessage('Ingresa un usuario o correo valido.');
       setLoading(false);
       return;
     }
@@ -67,7 +67,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail, password })
+        body: JSON.stringify({ email: normalizedLoginId, password })
       });
       if (res.ok) {
         setMessage('Ingreso correcto, redirigiendo...');
@@ -118,13 +118,13 @@ export default function LoginPage() {
 
         <form onSubmit={onSubmit} style={{ display: 'grid', gap: 16 }}>
           <div style={{ display: 'grid', gap: 6 }}>
-            <label className="label" htmlFor="email">Email</label>
+            <label className="label" htmlFor="login-id">Usuario o correo</label>
             <input
-              id="email"
+              id="login-id"
               className="input login-input"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              type="text"
+              value={loginId}
+              onChange={(event) => setLoginId(event.target.value)}
               required
               maxLength={120}
             />

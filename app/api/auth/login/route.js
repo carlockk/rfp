@@ -3,7 +3,7 @@ import { dbConnect } from '@/lib/db';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 import { signToken, setAuthCookie } from '@/lib/auth';
-import { isValidEmail, isValidPassword, sanitizeEmail } from '@/lib/validation';
+import { isValidLoginId, isValidPassword, sanitizeLoginId } from '@/lib/validation';
 
 export async function POST(req){
   let payload;
@@ -13,15 +13,16 @@ export async function POST(req){
     return new Response('Payload invalido', { status:400 });
   }
 
-  const email = sanitizeEmail(payload?.email);
+  const identifier = payload?.login ?? payload?.email ?? payload?.identifier;
+  const loginId = sanitizeLoginId(identifier);
   const password = typeof payload?.password === 'string' ? payload.password : '';
 
-  if (!isValidEmail(email) || !isValidPassword(password, { minLength: 6, maxLength: 120 })) {
+  if (!isValidLoginId(loginId) || !isValidPassword(password, { minLength: 6, maxLength: 120 })) {
     return new Response('Credenciales invalidas', { status:400 });
   }
 
   await dbConnect();
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: loginId });
   if (!user) return new Response('Unauthorized', { status:401 });
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return new Response('Unauthorized', { status:401 });

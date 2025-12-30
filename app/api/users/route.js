@@ -3,7 +3,7 @@ import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 import { requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
-import { assertSafeText, isValidEmail, isValidPassword, isValidPhone, sanitizeEmail, sanitizePhone } from '@/lib/validation';
+import { assertSafeText, isValidLoginId, isValidPassword, isValidPhone, sanitizeLoginId, sanitizePhone } from '@/lib/validation';
 
 function sanitize(user) {
   return {
@@ -65,9 +65,9 @@ export async function POST(req) {
       return new Response('Nombre invalido', { status: 400 });
     }
 
-    const normalizedEmail = sanitizeEmail(email);
-    if (!isValidEmail(normalizedEmail)) {
-      return new Response('Email invalido', { status: 400 });
+    const normalizedLogin = sanitizeLoginId(email);
+    if (!isValidLoginId(normalizedLogin)) {
+      return new Response('Usuario o correo invalido', { status: 400 });
     }
 
     if (!isValidPassword(password, { minLength: 6, maxLength: 120 })) {
@@ -88,9 +88,9 @@ export async function POST(req) {
 
     await dbConnect();
 
-    const existing = await User.findOne({ email: normalizedEmail });
+    const existing = await User.findOne({ email: normalizedLogin });
     if (existing) {
-      return new Response('Email ya registrado', { status: 409 });
+      return new Response('Usuario o correo ya registrado', { status: 409 });
     }
 
     const allowedProfiles = ['externo', 'candelaria'];
@@ -102,7 +102,7 @@ export async function POST(req) {
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({
       name: normalizedName,
-      email: normalizedEmail,
+      email: normalizedLogin,
       password: hashed,
       role,
       techProfile: profile,

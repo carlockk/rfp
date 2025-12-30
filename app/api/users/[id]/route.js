@@ -5,7 +5,7 @@ import { dbConnect } from '@/lib/db';
 import User from '@/models/User';
 import { requireRole } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
-import { assertSafeText, isValidEmail, isValidPassword, isValidPhone, sanitizeEmail, sanitizePhone } from '@/lib/validation';
+import { assertSafeText, isValidLoginId, isValidPassword, isValidPhone, sanitizeLoginId, sanitizePhone } from '@/lib/validation';
 
 export async function PUT(req, { params }) {
   const ses = await requireRole('superadmin');
@@ -34,11 +34,11 @@ export async function PUT(req, { params }) {
   }
 
   if (payload.email !== undefined) {
-    const normalizedEmail = sanitizeEmail(payload.email);
-    if (!isValidEmail(normalizedEmail)) {
-      return NextResponse.json({ error: 'Email invalido' }, { status: 400 });
+    const normalizedLogin = sanitizeLoginId(payload.email);
+    if (!isValidLoginId(normalizedLogin)) {
+      return NextResponse.json({ error: 'Usuario o correo invalido' }, { status: 400 });
     }
-    updates.email = normalizedEmail;
+    updates.email = normalizedLogin;
   }
 
   const allowedRoles = ['superadmin', 'admin', 'tecnico', 'supervisor'];
@@ -78,7 +78,7 @@ export async function PUT(req, { params }) {
   if (updates.email) {
     const exists = await User.findOne({ _id: { $ne: id }, email: updates.email }).lean();
     if (exists) {
-      return NextResponse.json({ error: 'Email ya registrado' }, { status: 409 });
+      return NextResponse.json({ error: 'Usuario o correo ya registrado' }, { status: 409 });
     }
   }
 
