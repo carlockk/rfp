@@ -1,28 +1,18 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import Equipment from '@/models/Equipment';
 import Evaluation from '@/models/Evaluation';
+import Checklist from '@/models/Checklist';
 import User from '@/models/User';
 import Notification from '@/models/Notification';
-import { buildComputedChecklistAlerts } from '@/lib/notifications';
 import GlobalSearch from './GlobalSearch';
 import TechnicianDashboard from './TechnicianDashboard';
+import RepairStatusControl from './RepairStatusControl';
 
-const STATUS_KEYS = ['ok', 'observado', 'critico'];
-
-const STATUS_LABELS = {
-  ok: 'Cumple',
-  observado: 'Caso NA',
-  critico: 'No cumple'
-};
-
-const STATUS_COLORS = {
-  ok: '#2e7d32',
-  observado: '#f9a825',
-  critico: '#c62828'
-};
+const ALERT_WINDOW_DAYS = 30;
 
 function formatDate(value) {
   if (!value) return '-';
@@ -45,11 +35,37 @@ function AdminDashboard({ metrics }) {
     activeTechnicians,
     formsSubmitted,
     criticalLast30,
-    monthlyStats,
+    equipmentByType,
+    equipmentTrend,
+    trendMonths,
+    trendPage,
+    trendTotal,
+    trendPageSize,
+    trendType,
+    trendTypes,
     recentCriticals,
-    notifications,
+    smartAlerts,
     consumption30d
   } = metrics;
+
+  const totalTrendPages = trendPageSize
+    ? Math.max(1, Math.ceil(trendTotal / trendPageSize))
+    : 1;
+  const currentTrendPage = Math.min(Math.max(trendPage || 1, 1), totalTrendPages);
+  const trendStart = trendTotal ? (currentTrendPage - 1) * trendPageSize + 1 : 0;
+  const trendEnd = Math.min(trendTotal, currentTrendPage * trendPageSize);
+  const trendPages = [];
+  const maxTrendButtons = 5;
+  let startPage = Math.max(1, currentTrendPage - 2);
+  let endPage = Math.min(totalTrendPages, startPage + maxTrendButtons - 1);
+  if (endPage - startPage < maxTrendButtons - 1) {
+    startPage = Math.max(1, endPage - maxTrendButtons + 1);
+  }
+  for (let page = startPage; page <= endPage; page += 1) {
+    trendPages.push(page);
+  }
+
+  const trendHref = (page) => `/?trendPage=${page}${trendType ? `&trendType=${encodeURIComponent(trendType)}` : ''}`;
 
   return (
     <div className="dashboard">
@@ -92,6 +108,38 @@ function AdminDashboard({ metrics }) {
 
       <div className="row" style={{ marginBottom: 24 }}>
         <div className="col">
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Equipos por tipo</h3>
+            {equipmentByType.length ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 10,
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))'
+                }}
+              >
+                {equipmentByType.map((item) => (
+                  <div
+                    key={item.type}
+                    className="kpi-card"
+                    style={{ background: 'var(--surface)', padding: 16 }}
+                  >
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{item.count}</div>
+                    <div className="label">{item.type || 'Sin tipo'}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="label" style={{ color: 'var(--muted)' }}>
+                No hay equipos registrados.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="row" style={{ marginBottom: 24 }}>
+        <div className="col">
           <div className="card kpi-card">
             <div className="kpi">{consumption30d.fuel.toFixed(1)}</div>
             <div className="label">Combustible (L) 30 días</div>
@@ -124,87 +172,144 @@ function AdminDashboard({ metrics }) {
       </div>
 
       <div className="row" style={{ marginBottom: 24 }}>
-        <div className="col" style={{ flexBasis: '60%' }}>
+        <div className="col" style={{ flexBasis: '70%' }}>
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Tendencia mensual</h3>
-            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-              {monthlyStats.map((item) => (
-                <div key={item.month} className="kpi-card" style={{ background: 'var(--surface)', padding: 16 }}>
-                  <p className="label" style={{ margin: 0 }}>{item.month}</p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, marginBottom: 12 }}>
-                    <div>
-                      <span className="label">Total</span>
-                      <div style={{ fontSize: 20, fontWeight: 700 }}>{item.total}</div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {STATUS_KEYS.map((status) => (
-                        <span key={status} className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: '50%',
-                              background: STATUS_COLORS[status],
-                              display: 'inline-block'
-                            }}
-                          />
-                          {item[status]}
-                        </span>
+            <h3 style={{ marginTop: 0 }}>Tendencia mensual (por equipo)</h3>
+            <form method="get" style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 12 }}>
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <label className="label" htmlFor="trend-type">Tipo de equipo</label>
+                <select
+                  id="trend-type"
+                  name="trendType"
+                  className="input"
+                  defaultValue={trendType || ''}
+                >
+                  <option value="">Todos</option>
+                  {trendTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+              <input type="hidden" name="trendPage" value="1" />
+              <button className="btn" type="submit">Aplicar</button>
+            </form>
+            {equipmentTrend.length ? (
+              <div className="table-wrapper">
+                <table className="table table--compact">
+                  <thead>
+                    <tr>
+                      <th>Equipo</th>
+                      <th>Tipo</th>
+                      {trendMonths.map((month) => (
+                        <th key={month.key}>{month.label}</th>
                       ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {equipmentTrend.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.code}</td>
+                        <td>{item.type || '-'}</td>
+                        {trendMonths.map((month) => {
+                          const data = item.months[month.key] || {
+                            hours: 0,
+                            kilometers: 0,
+                            fuel: 0,
+                            energy: 0
+                          };
+                          return (
+                            <td key={`${item.id}-${month.key}`}>
+                              <div className="label" style={{ lineHeight: 1.5 }}>
+                                Horas: <strong>{data.hours.toFixed(1)}</strong><br />
+                                Km: <strong>{data.kilometers.toFixed(1)}</strong><br />
+                                Comb: <strong>{data.fuel.toFixed(1)}</strong><br />
+                                Energía: <strong>{data.energy.toFixed(1)}</strong><br />
+                                Total: <strong>{data.total}</strong>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {trendTotal > trendPageSize ? (
+                  <div className="pagination">
+                    <span className="pagination__summary">
+                      Mostrando {trendStart}-{trendEnd} de {trendTotal}
+                    </span>
+                    <div className="pagination__controls" role="group" aria-label="Paginación">
+                      {currentTrendPage === 1 ? (
+                        <span className="pagination__button" aria-disabled="true">
+                          Anterior
+                        </span>
+                      ) : (
+                        <Link className="pagination__button" href={trendHref(currentTrendPage - 1)}>
+                          Anterior
+                        </Link>
+                      )}
+                      {trendPages.map((page) =>
+                        page === currentTrendPage ? (
+                          <span
+                            key={page}
+                            className="pagination__button"
+                            aria-current="page"
+                            style={{
+                              background: 'var(--accent)',
+                              borderColor: 'var(--accent)',
+                              color: '#fff'
+                            }}
+                          >
+                            {page}
+                          </span>
+                        ) : (
+                          <Link key={page} className="pagination__button" href={trendHref(page)}>
+                            {page}
+                          </Link>
+                        )
+                      )}
+                      {currentTrendPage === totalTrendPages ? (
+                        <span className="pagination__button" aria-disabled="true">
+                          Siguiente
+                        </span>
+                      ) : (
+                        <Link className="pagination__button" href={trendHref(currentTrendPage + 1)}>
+                          Siguiente
+                        </Link>
+                      )}
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                    <div className="label">
-                      Horas<br />
-                      <strong>{item.hourmeterDelta.toFixed(1)}</strong>
-                    </div>
-                    <div className="label">
-                      Km<br />
-                      <strong>{item.odometerDelta.toFixed(1)}</strong>
-                    </div>
-                    <div className="label">
-                      Combustible (L)<br />
-                      <strong>{item.fuelAddedLiters.toFixed(1)}</strong>
-                    </div>
-                    <div className="label">
-                      Energía (kWh)<br />
-                      <strong>{item.energyAddedKwh.toFixed(1)}</strong>
-                    </div>
-                    <div className="label">
-                      AdBlue (L)<br />
-                      <strong>{item.adblueAddedLiters.toFixed(1)}</strong>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {!monthlyStats.length ? (
-                <p className="label" style={{ color: 'var(--muted)' }}>
-                  Aún no hay evaluaciones en los últimos meses.
-                </p>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="label" style={{ color: 'var(--muted)' }}>
+                Aún no hay evaluaciones en los últimos meses.
+              </p>
+            )}
           </div>
         </div>
-        <div className="col" style={{ flexBasis: '40%' }}>
+        <div className="col" style={{ flexBasis: '30%' }}>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Alertas inteligentes</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {notifications.length ? (
-                notifications.map((alert) => (
+              {smartAlerts.length ? (
+                smartAlerts.map((alert) => (
                   <div
                     key={alert.id}
                     style={{
-                      borderLeft: `4px solid ${alert.level === 'high' ? '#c62828' : alert.level === 'medium' ? '#f9a825' : '#1976d2'}`,
+                      borderLeft: `4px solid ${alert.level === 'high' ? '#c62828' : '#f9a825'}`,
                       background: 'var(--surface)',
                       padding: '8px 12px'
                     }}
                   >
                     <p style={{ margin: 0, fontWeight: 600 }}>{alert.message}</p>
-                    <span className="label">{formatDate(alert.createdAt)}</span>
+                    <span className="label">{formatDate(alert.dueAt)}</span>
                   </div>
                 ))
               ) : (
-                <p className="label" style={{ color: 'var(--muted)' }}>No hay alertas activas.</p>
+                <p className="label" style={{ color: 'var(--muted)' }}>
+                  No hay alertas próximas.
+                </p>
               )}
             </div>
           </div>
@@ -223,6 +328,7 @@ function AdminDashboard({ metrics }) {
                 <th>técnico</th>
                 <th>Duración</th>
                 <th>Observaciones</th>
+                <th>Estado reparación</th>
               </tr>
             </thead>
             <tbody>
@@ -234,11 +340,17 @@ function AdminDashboard({ metrics }) {
                   <td>{item.technician?.name || item.technician?.email || '-'}</td>
                   <td>{formatDuration(item.durationSeconds)}</td>
                   <td>{item.observations || '-'}</td>
+                  <td>
+                    <RepairStatusControl
+                      evaluationId={item._id.toString()}
+                      initialStatus={item.repairStatus || 'desviacion'}
+                    />
+                  </td>
                 </tr>
               ))}
               {!recentCriticals.length ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
                     No hay fallas críticas recientes.
                   </td>
                 </tr>
@@ -251,7 +363,7 @@ function AdminDashboard({ metrics }) {
   );
 }
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams } = {}) {
   await dbConnect();
   const session = await getSession();
   if (!session) redirect('/login');
@@ -384,10 +496,17 @@ export default async function Dashboard() {
     );
   }
 
-  const since = new Date();
-  since.setMonth(since.getMonth() - 5);
-  since.setDate(1);
-  since.setHours(0, 0, 0, 0);
+  const trendPageRaw =
+    typeof searchParams?.trendPage === 'string' ? Number(searchParams.trendPage) : 1;
+  const trendPage = Number.isFinite(trendPageRaw) && trendPageRaw > 0 ? trendPageRaw : 1;
+  const trendType =
+    typeof searchParams?.trendType === 'string' ? searchParams.trendType.trim() : '';
+  const trendPageSize = 10;
+
+  const trendStart = new Date();
+  trendStart.setDate(1);
+  trendStart.setHours(0, 0, 0, 0);
+  trendStart.setMonth(trendStart.getMonth() - 2);
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -396,11 +515,11 @@ export default async function Dashboard() {
     activeTechnicians,
     formsSubmitted,
     criticalLast30,
-    monthlyStatsRaw,
+    equipmentDocs,
+    equipmentTrendRaw,
     recentCriticals,
-    notificationsRaw,
-    computedAlerts,
-    consumptionLast30
+    consumptionLast30,
+    trendTypes
   ] = await Promise.all([
     Equipment.countDocuments({ isActive: true }),
     User.countDocuments({ role: 'tecnico' }),
@@ -409,23 +528,48 @@ export default async function Dashboard() {
       status: 'critico',
       completedAt: { $gte: thirtyDaysAgo }
     }),
+    Equipment.find({ isActive: true })
+      .select('code type nextMaintenanceAt techReviewExpiresAt circulationPermitExpiresAt')
+      .sort({ code: 1 })
+      .lean(),
     Evaluation.aggregate([
-      { $match: { completedAt: { $gte: since } } },
+      { $match: { completedAt: { $gte: trendStart } } },
       {
         $group: {
-          _id: { year: { $year: '$completedAt' }, month: { $month: '$completedAt' } },
-          total: { $sum: 1 },
-          ok: { $sum: { $cond: [{ $eq: ['$status', 'ok'] }, 1, 0] } },
-          observado: { $sum: { $cond: [{ $eq: ['$status', 'observado'] }, 1, 0] } },
-          critico: { $sum: { $cond: [{ $eq: ['$status', 'critico'] }, 1, 0] } },
+          _id: { equipment: '$equipment', year: { $year: '$completedAt' }, month: { $month: '$completedAt' } },
           hourmeterDelta: { $sum: { $ifNull: ['$hourmeterDelta', 0] } },
           odometerDelta: { $sum: { $ifNull: ['$odometerDelta', 0] } },
           fuelAddedLiters: { $sum: { $ifNull: ['$fuelAddedLiters', 0] } },
           energyAddedKwh: { $sum: { $ifNull: ['$energyAddedKwh', 0] } },
-          adblueAddedLiters: { $sum: { $ifNull: ['$adblueAddedLiters', 0] } }
+          latestCompletedAt: { $max: '$completedAt' },
+          total: { $sum: 1 }
         }
       },
-      { $sort: { '_id.year': 1, '_id.month': 1 } }
+      {
+        $lookup: {
+          from: 'equipments',
+          localField: '_id.equipment',
+          foreignField: '_id',
+          as: 'equipment'
+        }
+      },
+      { $unwind: '$equipment' },
+      { $match: { 'equipment.isActive': true } },
+      {
+        $project: {
+          equipmentId: '$_id.equipment',
+          code: '$equipment.code',
+          type: '$equipment.type',
+          year: '$_id.year',
+          month: '$_id.month',
+          hourmeterDelta: 1,
+          odometerDelta: 1,
+          fuelAddedLiters: 1,
+          energyAddedKwh: 1,
+          latestCompletedAt: 1,
+          total: 1
+        }
+      }
     ]),
     Evaluation.find({ status: 'critico' })
       .sort({ completedAt: -1 })
@@ -434,11 +578,6 @@ export default async function Dashboard() {
       .populate('equipment', 'code type')
       .populate('technician', 'name email')
       .lean(),
-    Notification.find({ $or: [{ audience: 'all' }, { audience: 'admin' }] })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .lean(),
-    buildComputedChecklistAlerts(),
     Evaluation.aggregate([
       { $match: { completedAt: { $gte: thirtyDaysAgo } } },
       {
@@ -451,8 +590,14 @@ export default async function Dashboard() {
           hours: { $sum: { $ifNull: ['$hourmeterDelta', 0] } }
         }
       }
-    ])
+    ]),
+    Equipment.distinct('type', { isActive: true })
   ]);
+
+
+  const sortedTrendTypes = Array.isArray(trendTypes)
+    ? trendTypes.filter(Boolean).sort((a, b) => a.localeCompare(b))
+    : [];
 
   const consumptionTotalsRaw = consumptionLast30[0] || {};
   const consumptionTotals = {
@@ -463,38 +608,111 @@ export default async function Dashboard() {
     hours: Number(consumptionTotalsRaw.hours || 0)
   };
 
-  const monthlyStats = monthlyStatsRaw.map((item) => {
-    const year = item._id.year;
-    const month = item._id.month - 1;
-    const label = new Date(year, month, 1).toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
-    return {
-      month: label,
-      total: item.total,
-      ok: item.ok,
-      observado: item.observado,
-      critico: item.critico,
-      hourmeterDelta: item.hourmeterDelta || 0,
-      odometerDelta: item.odometerDelta || 0,
-      fuelAddedLiters: item.fuelAddedLiters || 0,
-      energyAddedKwh: item.energyAddedKwh || 0,
-      adblueAddedLiters: item.adblueAddedLiters || 0
-    };
+  const baseMonth = new Date();
+  baseMonth.setDate(1);
+  baseMonth.setHours(0, 0, 0, 0);
+  const trendMonths = Array.from({ length: 3 }, (_, index) => {
+    const date = new Date(baseMonth);
+    date.setMonth(date.getMonth() - index);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const label = date.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+    return { key, label };
   });
 
-  const notifications = [
-    ...computedAlerts.map((alert) => ({
-      id: alert.id,
-      message: alert.message,
-      level: alert.level,
-      createdAt: alert.createdAt
-    })),
-    ...notificationsRaw.map((item) => ({
-      id: item._id.toString(),
-      message: item.message,
-      level: item.level,
-      createdAt: item.createdAt
-    }))
-  ].slice(0, 6);
+  const monthKeys = new Set(trendMonths.map((item) => item.key));
+  const equipmentTrendMap = {};
+  const filteredEquipmentDocs = trendType
+    ? equipmentDocs.filter((item) => item.type === trendType)
+    : equipmentDocs;
+
+  filteredEquipmentDocs.forEach((item) => {
+    const id = item._id.toString();
+    equipmentTrendMap[id] = {
+      id,
+      code: item.code,
+      type: item.type || '',
+      months: {},
+      lastCompletedAt: null
+    };
+    trendMonths.forEach((month) => {
+      equipmentTrendMap[id].months[month.key] = {
+        hours: 0,
+        kilometers: 0,
+        fuel: 0,
+        energy: 0,
+        total: 0
+      };
+    });
+  });
+
+  equipmentTrendRaw.forEach((item) => {
+    const id = item.equipmentId?.toString();
+    if (!id || !equipmentTrendMap[id]) return;
+    const key = `${item.year}-${String(item.month).padStart(2, '0')}`;
+    if (!monthKeys.has(key)) return;
+    const target = equipmentTrendMap[id].months[key];
+    target.hours += Number(item.hourmeterDelta || 0);
+    target.kilometers += Number(item.odometerDelta || 0);
+    target.fuel += Number(item.fuelAddedLiters || 0);
+    target.energy += Number(item.energyAddedKwh || 0);
+    target.total += Number(item.total || 0);
+    if (item.latestCompletedAt) {
+      const current = equipmentTrendMap[id].lastCompletedAt;
+      const next = new Date(item.latestCompletedAt);
+      if (!current || next > current) {
+        equipmentTrendMap[id].lastCompletedAt = next;
+      }
+    }
+  });
+
+  const equipmentTrend = Object.values(equipmentTrendMap).sort((a, b) => {
+    const aTime = a.lastCompletedAt ? new Date(a.lastCompletedAt).getTime() : 0;
+    const bTime = b.lastCompletedAt ? new Date(b.lastCompletedAt).getTime() : 0;
+    if (bTime !== aTime) return bTime - aTime;
+    return a.code.localeCompare(b.code);
+  });
+  const trendTotal = equipmentTrend.length;
+  const totalTrendPages = Math.max(1, Math.ceil(trendTotal / trendPageSize));
+  const safeTrendPage = Math.min(trendPage, totalTrendPages);
+  const trendSliceStart = (safeTrendPage - 1) * trendPageSize;
+  const equipmentTrendPage = equipmentTrend.slice(
+    trendSliceStart,
+    trendSliceStart + trendPageSize
+  );
+
+  const typeMap = new Map();
+  equipmentDocs.forEach((item) => {
+    const type = item.type || '';
+    typeMap.set(type, (typeMap.get(type) || 0) + 1);
+  });
+  const equipmentByType = Array.from(typeMap.entries())
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => a.type.localeCompare(b.type));
+
+  const now = new Date();
+  const alertWindowMs = ALERT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const smartAlerts = [];
+  const pushAlert = (equipment, key, label, dateValue) => {
+    if (!dateValue) return;
+    const dueAt = new Date(dateValue);
+    if (Number.isNaN(dueAt.getTime())) return;
+    const diff = dueAt.getTime() - now.getTime();
+    if (diff > alertWindowMs) return;
+    smartAlerts.push({
+      id: `${equipment._id}-${key}`,
+      message: `${equipment.code}: ${label}`,
+      dueAt,
+      level: diff < 0 ? 'high' : 'medium'
+    });
+  };
+
+  equipmentDocs.forEach((equipment) => {
+    pushAlert(equipment, 'maintenance', 'Próxima mantención', equipment.nextMaintenanceAt);
+    pushAlert(equipment, 'tech-review', 'Revisión técnica', equipment.techReviewExpiresAt);
+    pushAlert(equipment, 'permit', 'Permiso de circulación', equipment.circulationPermitExpiresAt);
+  });
+
+  smartAlerts.sort((a, b) => a.dueAt - b.dueAt);
 
   return (
     <AdminDashboard
@@ -503,9 +721,16 @@ export default async function Dashboard() {
         activeTechnicians,
         formsSubmitted,
         criticalLast30,
-        monthlyStats,
+        equipmentByType,
+        equipmentTrend: equipmentTrendPage,
+        trendMonths,
+        trendPage: safeTrendPage,
+        trendTotal,
+        trendPageSize,
+        trendType,
+        trendTypes: sortedTrendTypes,
         recentCriticals,
-        notifications,
+        smartAlerts,
         consumption30d: consumptionTotals
       }}
     />

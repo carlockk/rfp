@@ -195,6 +195,38 @@ export default function EquipmentFormPanel({ value, onChange, types, onAddType, 
           min="0"
         />
       </div>
+      <div className="form-field">
+        <label className="label" htmlFor="nextMaintenanceAt">Proxima mantencion</label>
+        <input
+          id="nextMaintenanceAt"
+          className="input"
+          type="date"
+          value={value.nextMaintenanceAt}
+          onChange={(event) => onChange({ ...value, nextMaintenanceAt: event.target.value })}
+        />
+      </div>
+      <div className="form-field">
+        <label className="label" htmlFor="techReviewExpiresAt">Revision tecnica vence</label>
+        <input
+          id="techReviewExpiresAt"
+          className="input"
+          type="date"
+          value={value.techReviewExpiresAt}
+          onChange={(event) => onChange({ ...value, techReviewExpiresAt: event.target.value })}
+        />
+      </div>
+      <div className="form-field">
+        <label className="label" htmlFor="circulationPermitExpiresAt">Permiso de circulacion vence</label>
+        <input
+          id="circulationPermitExpiresAt"
+          className="input"
+          type="date"
+          value={value.circulationPermitExpiresAt}
+          onChange={(event) =>
+            onChange({ ...value, circulationPermitExpiresAt: event.target.value })
+          }
+        />
+      </div>
       <div className="form-field form-field--full">
         <label className="label" htmlFor="notes">Notas</label>
         <textarea

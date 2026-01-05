@@ -416,6 +416,10 @@ export async function POST(req: NextRequest) {
     equipment: equipment._id,
     technician: session.id,
     status,
+    repairStatus: status === 'critico' ? 'desviacion' : null,
+    repairNote: '',
+    repairUpdatedAt: null,
+    repairedAt: null,
     anomaly,
     responses,
     observations,
@@ -523,20 +527,24 @@ export async function POST(req: NextRequest) {
     });
     console.log('[whatsapp] aviso supervisor', supervisorLabel);
 
-    if (isFcmAvailable()) {
+    if (await isFcmAvailable()) {
       const tokens = await FcmToken.find({ user: supervisorUser._id })
         .select('token')
         .lean<Array<{ token: string }>>();
       const tokenValues = tokens.map((item) => item.token).filter(Boolean);
       if (tokenValues.length) {
-        await sendFcmToTokens(tokenValues, {
-          title: 'Nueva evaluacion asignada',
-          body: `${equipment.code}${contextName ? ` - ${contextName}` : ''}`,
-          data: {
-            url: '/supervisor',
-            evaluationId: evaluation._id.toString()
-          }
-        });
+        try {
+          await sendFcmToTokens(tokenValues, {
+            title: 'Nueva evaluacion asignada',
+            body: `${equipment.code}${contextName ? ` - ${contextName}` : ''}`,
+            data: {
+              url: '/supervisor',
+              evaluationId: evaluation._id.toString()
+            }
+          });
+        } catch (err) {
+          console.error('No se pudo enviar notificacion FCM', err);
+        }
       }
     }
   }

@@ -11,6 +11,14 @@ const EvaluationSchema = new mongoose.Schema({
   equipment: { type: mongoose.Schema.Types.ObjectId, ref: 'Equipment', required: true },
   technician: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, enum: ['ok', 'observado', 'critico'], default: 'ok' },
+  repairStatus: {
+    type: String,
+    enum: ['desviacion', 'en_reparacion', 'reparado'],
+    default: null
+  },
+  repairNote: { type: String, default: '' },
+  repairUpdatedAt: { type: Date, default: null },
+  repairedAt: { type: Date, default: null },
   responses: { type: [EvaluationResponseSchema], default: [] },
   observations: { type: String, default: '' },
   startedAt: { type: Date, default: Date.now },

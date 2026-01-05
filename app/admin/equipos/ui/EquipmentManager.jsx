@@ -60,6 +60,13 @@ const EMPTY_EQUIPMENT = {
 
 
 
+
+  nextMaintenanceAt: '',
+
+  techReviewExpiresAt: '',
+
+  circulationPermitExpiresAt: '',
+
   notes: '',
 
 
@@ -212,6 +219,12 @@ const mapEquipmentToDraft = (equipment) => {
 
 
 
+    nextMaintenanceAt: formatDateInput(equipment.nextMaintenanceAt),
+
+    techReviewExpiresAt: formatDateInput(equipment.techReviewExpiresAt),
+
+    circulationPermitExpiresAt: formatDateInput(equipment.circulationPermitExpiresAt),
+
     notes: equipment.notes || '',
 
 
@@ -273,6 +286,30 @@ const formatFileSize = (bytes) => {
 
 
   return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+
+
+
+};
+
+
+
+const formatDateInput = (value) => {
+
+
+
+  if (!value) return '';
+
+
+
+  const date = new Date(value);
+
+
+
+  if (Number.isNaN(date.getTime())) return '';
+
+
+
+  return date.toISOString().slice(0, 10);
 
 
 

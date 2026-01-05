@@ -15,6 +15,16 @@ const optionalText = (
   return normalized;
 };
 
+const parseOptionalDate = (value: unknown, label: string): Date | null => {
+  if (value === undefined || value === null || value === '') return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  throw new Error(`${label} invalida`);
+};
+
 export function sanitizeEquipmentPayload(raw: Record<string, any> = {}) {
   const code = assertSafeText(raw.code, { minLength: 2, maxLength: 40 });
   if (!code) throw new Error('Codigo invalido');
@@ -35,6 +45,12 @@ export function sanitizeEquipmentPayload(raw: Record<string, any> = {}) {
 
   const fuel = ALLOWED_FUELS.has(raw.fuel) ? raw.fuel : 'diesel';
   const adblue = Boolean(raw.adblue);
+  const nextMaintenanceAt = parseOptionalDate(raw.nextMaintenanceAt, 'Proxima mantencion');
+  const techReviewExpiresAt = parseOptionalDate(raw.techReviewExpiresAt, 'Revision tecnica');
+  const circulationPermitExpiresAt = parseOptionalDate(
+    raw.circulationPermitExpiresAt,
+    'Permiso de circulacion'
+  );
 
   return {
     code,
@@ -46,6 +62,9 @@ export function sanitizeEquipmentPayload(raw: Record<string, any> = {}) {
     fuel,
     adblue,
     hourmeterBase,
-    odometerBase
+    odometerBase,
+    nextMaintenanceAt,
+    techReviewExpiresAt,
+    circulationPermitExpiresAt
   };
 }

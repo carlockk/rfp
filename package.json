@@ -13,7 +13,7 @@
     "bcryptjs": "2.4.3",
     "cloudinary": "1.41.3",
     "date-fns": "^3.6.0",
-    "firebase-admin": "^13.0.2",
+    "firebase-admin": "^13.6.0",
     "idb": "^8.0.3",
     "jsonwebtoken": "9.0.2",
     "lucide-react": "^0.553.0",
@@ -33,6 +33,7 @@
     "@types/node": "24.10.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "baseline-browser-mapping": "^2.9.11",
     "typescript": "5.9.3"
   }
 }

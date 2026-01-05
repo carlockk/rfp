@@ -12,6 +12,9 @@ const EquipmentSchema = new mongoose.Schema({
   hourmeterBase: { type: Number, default: 0 },
   odometerBase: { type: Number, default: 0 },
   notes: String,
+  nextMaintenanceAt: { type: Date, default: null },
+  techReviewExpiresAt: { type: Date, default: null },
+  circulationPermitExpiresAt: { type: Date, default: null },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   assignedAt: { type: Date, default: null },
   operators: [

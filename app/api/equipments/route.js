@@ -40,7 +40,7 @@ export async function GET(req) {
   let query = baseQuery;
   let projection = null;
 
-  if (session.role === 'admin' || session.role === 'superadmin') {
+  if (session.role === 'admin' || session.role === 'superadmin' || session.role === 'supervisor') {
     // Admins ven todos los equipos y sus documentos.
     query = baseQuery;
   } else if (session.role === 'tecnico') {

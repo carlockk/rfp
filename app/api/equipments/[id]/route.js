@@ -35,7 +35,7 @@ const populateEquipment = (query) =>
     .lean();
 
 export async function GET(_req, { params }) {
-  const ses = await requireRole(['admin', 'superadmin']);
+  const ses = await requireRole(['admin', 'superadmin', 'supervisor']);
   if (!ses) return new Response('Forbidden', { status: 403 });
 
   await dbConnect();
@@ -47,7 +47,7 @@ export async function GET(_req, { params }) {
 }
 
 export async function PUT(req, { params }) {
-  const ses = await requireRole('admin');
+  const ses = await requireRole(['admin', 'superadmin', 'supervisor']);
   if (!ses) return new Response('Forbidden', { status: 403 });
 
   await dbConnect();

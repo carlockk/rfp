@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import PaginationControls from './PaginationControls';
+import RepairStatusControl from './RepairStatusControl';
 
 const STATUS_LABELS = {
   ok: 'Cumple',
@@ -365,6 +366,7 @@ export default function SupervisorDashboard() {
               <th>Odometro</th>
               <th>Delta odometro</th>
               <th>Supervisor</th>
+              <th>Reparacion</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -430,6 +432,16 @@ export default function SupervisorDashboard() {
                     ) : null}
                   </td>
                   <td>
+                    {item.status === 'critico' ? (
+                      <RepairStatusControl
+                        evaluationId={id}
+                        initialStatus={item.repairStatus || 'desviacion'}
+                      />
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <button className="btn" type="button" onClick={() => updateStatus(id, 'en_revision')}>
                         En revisión
@@ -447,7 +459,7 @@ export default function SupervisorDashboard() {
             })}
             {!pagedItems.length ? (
               <tr>
-                <td colSpan={11} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
+                <td colSpan={12} style={{ textAlign: 'center', padding: 16, color: 'var(--muted)' }}>
                   No hay checklists asignados para mostrar.
                 </td>
               </tr>

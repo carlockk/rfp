@@ -1,4 +1,3 @@
-import admin from 'firebase-admin';
 import FcmToken from '@/models/FcmToken';
 
 type FcmPayload = {
@@ -8,6 +7,7 @@ type FcmPayload = {
 };
 
 let isConfigured = false;
+let adminModule: typeof import('firebase-admin') | null = null;
 
 function getServiceAccount() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -20,28 +20,38 @@ function getServiceAccount() {
   }
 }
 
-function ensureConfigured() {
+async function ensureConfigured() {
   if (isConfigured) return true;
-  if (admin.apps.length) {
+  if (!adminModule) {
+    try {
+      adminModule = await import('firebase-admin');
+    } catch (err) {
+      console.warn('FCM deshabilitado: falta firebase-admin', err);
+      return false;
+    }
+  }
+  if (adminModule.apps.length) {
     isConfigured = true;
     return true;
   }
   const serviceAccount = getServiceAccount();
   if (!serviceAccount) return false;
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+  adminModule.initializeApp({
+    credential: adminModule.credential.cert(serviceAccount)
   });
   isConfigured = true;
   return true;
 }
 
-export function isFcmAvailable() {
+export async function isFcmAvailable() {
   return ensureConfigured();
 }
 
 export async function sendFcmToTokens(tokens: string[], payload: FcmPayload) {
-  if (!ensureConfigured() || !tokens.length) return;
-  const response = await admin.messaging().sendEachForMulticast({
+  if (!tokens.length) return;
+  const ready = await ensureConfigured();
+  if (!ready || !adminModule) return;
+  const response = await adminModule.messaging().sendEachForMulticast({
     tokens,
     notification: {
       title: payload.title,
