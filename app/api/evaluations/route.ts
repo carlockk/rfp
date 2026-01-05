@@ -500,6 +500,24 @@ export async function POST(req: NextRequest) {
   }
 
   if (currentHourmeter != null && previousEvaluation?.hourmeterCurrent != null) {
+    if (currentHourmeter < previousEvaluation.hourmeterCurrent) {
+      return NextResponse.json(
+        { error: 'Horometro menor al anterior' },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (currentOdometer != null && previousEvaluation?.odometerCurrent != null) {
+    if (currentOdometer < previousEvaluation.odometerCurrent) {
+      return NextResponse.json(
+        { error: 'Odometro menor al anterior' },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (currentHourmeter != null && previousEvaluation?.hourmeterCurrent != null) {
     const delta = currentHourmeter - previousEvaluation.hourmeterCurrent;
     if (Number.isFinite(delta) && delta >= 0) {
       evaluationData.hourmeterPrevious = previousEvaluation.hourmeterCurrent;
