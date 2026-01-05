@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/db';
 import Evaluation from '@/models/Evaluation';
@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit';
 
 const ALLOWED_STATUS = new Set(['desviacion', 'en_reparacion', 'reparado']);
 
-export async function PUT(req: Request, { params }: { params?: { id?: string } }) {
+export async function PUT(req: NextRequest, { params }: { params?: { id?: string } }) {
   const session = await requireRole(['admin', 'superadmin', 'supervisor']);
   if (!session) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
