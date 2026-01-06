@@ -108,8 +108,13 @@ function AdminDashboard({ metrics }) {
 
       <div className="row" style={{ marginBottom: 24 }}>
         <div className="col">
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>Equipos por tipo</h3>
+          <details className="card">
+            <summary
+              className="details-summary"
+            >
+              <span>Equipos por tipo</span>
+              <span className="details-chevron">▾</span>
+            </summary>
             {equipmentByType.length ? (
               <div
                 style={{
@@ -134,42 +139,50 @@ function AdminDashboard({ metrics }) {
                 No hay equipos registrados.
               </p>
             )}
-          </div>
+          </details>
         </div>
       </div>
 
-      <div className="row" style={{ marginBottom: 24 }}>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{consumption30d.fuel.toFixed(1)}</div>
-            <div className="label">Combustible (L) 30 días</div>
+      <details className="card" style={{ marginBottom: 24 }}>
+        <summary
+          className="details-summary"
+        >
+          <span>Totales globales (30 días)</span>
+          <span className="details-chevron">▾</span>
+        </summary>
+        <div className="row" style={{ marginBottom: 0 }}>
+          <div className="col">
+            <div className="card kpi-card">
+              <div className="kpi">{consumption30d.fuel.toFixed(1)}</div>
+              <div className="label">Combustible (L) 30 días</div>
+            </div>
+          </div>
+          <div className="col">
+            <div className="card kpi-card">
+              <div className="kpi">{consumption30d.energy.toFixed(1)}</div>
+              <div className="label">Energía (kWh) 30 días</div>
+            </div>
+          </div>
+          <div className="col">
+            <div className="card kpi-card">
+              <div className="kpi">{consumption30d.adblue.toFixed(1)}</div>
+              <div className="label">AdBlue (L) 30 días</div>
+            </div>
+          </div>
+          <div className="col">
+            <div className="card kpi-card">
+              <div className="kpi">{consumption30d.kilometers.toFixed(1)}</div>
+              <div className="label">Kilómetros 30 días</div>
+            </div>
+          </div>
+          <div className="col">
+            <div className="card kpi-card">
+              <div className="kpi">{consumption30d.hours.toFixed(1)}</div>
+              <div className="label">Horas operadas 30 días</div>
+            </div>
           </div>
         </div>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{consumption30d.energy.toFixed(1)}</div>
-            <div className="label">Energía (kWh) 30 días</div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{consumption30d.adblue.toFixed(1)}</div>
-            <div className="label">AdBlue (L) 30 días</div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{consumption30d.kilometers.toFixed(1)}</div>
-            <div className="label">Kilómetros 30 días</div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card kpi-card">
-            <div className="kpi">{consumption30d.hours.toFixed(1)}</div>
-            <div className="label">Horas operadas 30 días</div>
-          </div>
-        </div>
-      </div>
+      </details>
 
       <div className="row" style={{ marginBottom: 24 }}>
         <div className="col" style={{ flexBasis: '70%' }}>
