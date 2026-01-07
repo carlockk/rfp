@@ -12,7 +12,7 @@ import GlobalSearch from './GlobalSearch';
 import TechnicianDashboard from './TechnicianDashboard';
 import RepairStatusControl from './RepairStatusControl';
 
-const ALERT_WINDOW_DAYS = 30;
+const ALERT_WINDOW_DAYS = 90;
 
 function formatDate(value) {
   if (!value) return '-';
@@ -303,19 +303,46 @@ function AdminDashboard({ metrics }) {
         </div>
         <div className="col" style={{ flexBasis: '30%' }}>
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Alertas inteligentes</h3>
+            <h3 style={{ marginTop: 0 }}>Alertas inteligentes (90 días)</h3>
+            <div className="label" style={{ marginBottom: 12 }}>
+              <span style={{ color: '#c62828', fontWeight: 600 }}>●</span> Vencidas o ≤30 días{' '}
+              <span style={{ color: '#f9a825', fontWeight: 600 }}>●</span> 31–60 días{' '}
+              <span style={{ color: '#1565c0', fontWeight: 600 }}>●</span> 61–90 días
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {smartAlerts.length ? (
                 smartAlerts.map((alert) => (
                   <div
                     key={alert.id}
                     style={{
-                      borderLeft: `4px solid ${alert.level === 'high' ? '#c62828' : '#f9a825'}`,
+                      borderLeft: `4px solid ${
+                        alert.level === 'high'
+                          ? '#c62828'
+                          : alert.level === 'medium'
+                            ? '#f9a825'
+                            : '#1565c0'
+                      }`,
                       background: 'var(--surface)',
                       padding: '8px 12px'
                     }}
                   >
-                    <p style={{ margin: 0, fontWeight: 600 }}>{alert.message}</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                      <p style={{ margin: 0, fontWeight: 600 }}>{alert.message}</p>
+                      <span
+                        className="label"
+                        style={{
+                          color:
+                            alert.level === 'high'
+                              ? '#c62828'
+                              : alert.level === 'medium'
+                                ? '#f9a825'
+                                : '#1565c0',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {alert.isOverdue ? 'Vencida' : `En ${alert.daysLeft} días`}
+                      </span>
+                    </div>
                     <span className="label">{formatDate(alert.dueAt)}</span>
                   </div>
                 ))
@@ -711,11 +738,21 @@ export default async function Dashboard({ searchParams } = {}) {
     if (Number.isNaN(dueAt.getTime())) return;
     const diff = dueAt.getTime() - now.getTime();
     if (diff > alertWindowMs) return;
+    const daysLeft = Math.ceil(diff / (24 * 60 * 60 * 1000));
+    const isOverdue = diff < 0;
+    const level =
+      isOverdue || daysLeft <= 30
+        ? 'high'
+        : daysLeft <= 60
+          ? 'medium'
+          : 'low';
     smartAlerts.push({
       id: `${equipment._id}-${key}`,
       message: `${equipment.code}: ${label}`,
       dueAt,
-      level: diff < 0 ? 'high' : 'medium'
+      level,
+      daysLeft,
+      isOverdue
     });
   };
 
